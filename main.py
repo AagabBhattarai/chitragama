@@ -19,6 +19,7 @@ def main():
 
     sfm.start = 0
     sfm.display()
+    sfm.write_to_ply_file()
 
 if __name__ == "__main__":
     main()

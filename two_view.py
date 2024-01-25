@@ -115,7 +115,8 @@ class TwoView:
         
         for (x,y) in self.inliers_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)]
-            pixel_color = list(map(lambda x: float(x)/255, pixel_color))
+            # pixel_color = list(map(lambda x: float(x)/255, pixel_color))
+            pixel_color = np.array([255,0,0], np.uint8)
             self.pts_3D_color.append(pixel_color)
         
         self.transfomation_matrix = np.eye(4)
@@ -150,7 +151,7 @@ class TwoView:
         # x' = K*[R|t] X'; X= X';;;TO DEFINE PROPERLY  
         proj2 = proj1 @ self.transfomation_matrix
         
-        # recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.left.T, self.right.T).T
+        recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
         
         self.proj1 = proj2
@@ -160,12 +161,6 @@ class TwoView:
         
     def display(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
-        x,y,z =self.pts_3D[:, 0], self.pts_3D[:,1], self.pts_3D[:, 2] 
-        pts = list(zip(x,y,z))
-        vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
-
-        el = PlyElement.describe(vertex, 'vertex')
-        PlyData([el]).write("test.ply")
 
         fig = plt.figure(figsize = (10,10))
         ax = plt.axes(projection='3d')
@@ -173,7 +168,7 @@ class TwoView:
         start = self.start
         stop = self.stop
         # ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1, c= self.pts_3D_color[self.start:self.stop])
-        ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1)
+        ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1) 
         self.start = self.stop
         ax.set_title('3D Parametric Plot')
         ax.set_xlabel('x', labelpad=20)
@@ -184,3 +179,33 @@ class TwoView:
         # plt.scatter(self.pts_3D[:, 0], self.pts_3D[:,1], marker='.')
         self.pts_3D = self.pts_3D.tolist()
         plt.show()
+
+    def write_to_ply_file(self):
+        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        x,y,z =self.pts_3D[:, 0], self.pts_3D[:,1], self.pts_3D[:, 2]
+        self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
+        r, g, b= self.pts_3D_color[:, 0], self.pts_3D_color[:, 1], self.pts_3D_color[:, 2] 
+        pts = list(zip(x,y,z,r,g,b))
+        vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('r', 'u1'), ('g', 'u1'), ('b', 'u1')])
+
+        el = PlyElement.describe(vertex, 'vertex')
+        PlyData([el]).write("test.ply")
+    # def write_to_ply_file(self, filename="test.ply"):
+    #     self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+    #     self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
+    #     x, y, z = self.pts_3D[:, 0], self.pts_3D[:, 1], self.pts_3D[:, 2]
+    #     r, g, b = self.pts_3D_color[:, 0], self.pts_3D_color[:, 1], self.pts_3D_color[:, 2]
+
+    #     pts = list(zip(x, y, z, r, g, b))
+
+    #     vertex = PlyElement.describe(
+    #         [('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')],
+    #         'vertex'
+    #     )
+
+    #     plydata = PlyData([vertex])
+
+    #     for point in pts:
+    #         plydata['vertex'].data.append(point)
+
+    #     plydata.write(filename)
