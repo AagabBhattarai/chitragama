@@ -92,7 +92,8 @@ class TwoView:
         matching_points_from_right = np.float32([ self.kp2[m.trainIdx].pt for m in matches ]).reshape(-1,1,2)
         
         #here USAC_DEFAULT or USAC_MAGSAC are other flag options to play with
-        M, mask = cv.findHomography(matching_points_from_left, matching_points_from_right, cv.RANSAC,5.0)
+        # M, mask = cv.findHomography(matching_points_from_left, matching_points_from_right, cv.RANSAC,5.0)
+        F, mask = cv.findFundamentalMat(matching_points_from_left, matching_points_from_right, cv.FM_RANSAC)
         matching_points_from_left.reshape(matching_points_from_left.size//2,2)
         matching_points_from_right.reshape(matching_points_from_right.size//2,2)
         self.inliers_left = matching_points_from_left[mask.ravel() == 1].reshape(-1,2)
@@ -116,7 +117,7 @@ class TwoView:
         for (x,y) in self.inliers_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)]
             # pixel_color = list(map(lambda x: float(x)/255, pixel_color))
-            pixel_color = np.array([255,0,0], np.uint8)
+            pixel_color = np.array([0,255,0], np.uint8)
             self.pts_3D_color.append(pixel_color)
         
         self.transfomation_matrix = np.eye(4)
