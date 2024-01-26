@@ -117,7 +117,7 @@ class TwoView:
         for (x,y) in self.inliers_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)]
             # pixel_color = list(map(lambda x: float(x)/255, pixel_color))
-            pixel_color = np.array([0,255,0], np.uint8)
+            # pixel_color = np.array([0,255,0], np.uint8)
             self.pts_3D_color.append(pixel_color)
         
         self.transfomation_matrix = np.eye(4)
@@ -187,7 +187,7 @@ class TwoView:
         self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
         r, g, b= self.pts_3D_color[:, 0], self.pts_3D_color[:, 1], self.pts_3D_color[:, 2] 
         pts = list(zip(x,y,z,r,g,b))
-        vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('r', 'u1'), ('g', 'u1'), ('b', 'u1')])
+        vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
 
         el = PlyElement.describe(vertex, 'vertex')
         PlyData([el]).write("test.ply")
