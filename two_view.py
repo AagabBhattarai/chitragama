@@ -72,6 +72,7 @@ class TwoView:
             common_pts_index, common_pts_index_rev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
         else:
             common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+        
         #same thing as above but readable
         # common_pts_index = []
         # common_pts_index_rev = []
@@ -209,7 +210,7 @@ class TwoView:
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
         self.proj1_alt = proj2
-        self.camera_path.append((proj2[:3,3].ravel()).tolist())
+        self.camera_path.append((-proj2[:3,:3].T @ proj2[:3,3]).tolist())
         self.stop += recovered_3D_points_in_homogenous.shape[0] 
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
