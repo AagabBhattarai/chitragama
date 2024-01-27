@@ -12,21 +12,26 @@ class TwoView:
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
         intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
         self.transfomation_matrix = None
         self.proj1_alt = temp[:3,:4]
-    
         
         self.kp1 = None
         self.kp2 = None
         self.des1 = None
         self.des2 = None
+        #Here left == smaller indexed image and right == higher indexed image 
         self.inliers_left = None
         self.inliers_right = None
         self.left = None
         self.right = None
+        self.unique_pts_left = None
+        self.unique_pts_right = None
+        #overlapping pts for newly registered image
+        self.overlapping_pts_nri = None
         
         self.pts_3D = []
         self.pts_3D_color = []
@@ -35,7 +40,56 @@ class TwoView:
         self.stride = []
         self.start = 0
         self.stop = 0
+        
+        #store location of keypoints from previously triangulated image pair
+        self.potential_overlaping_img_pts = None
+        #misnomer since this variable is used for storing overlapping 3D points
+        self.potential_overlapping_object_pts = None
     
+    def store_for_next_registration(self):
+        self.potential_overlaping_img_pts = self.unique_pts_right.copy()
+        #pts_3D.append is used so; converting between list to numpy array and then back
+        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        self.potential_overlapping_object_pts = self.pts_3D[ self.start: self.stop, :]
+        self.pts_3D = self.pts_3D.tolist() 
+        #setting for next set of registraion????
+        self.start = self.stop 
+    
+    def find_overlap(self) :
+        #so at this stage of the pipeline:
+        #self.inliers_left contains correspondance for the view with new registration 
+        #   which should also have overlap with self.potential_overlapping_img_pts
+        #self.inliers_right contains newly registered image points 
+        #Now we find overlapping image points for new registration with object points
+        
+        #find rows/pt's index where overlap
+        # all this because of broadcasting rule where newaxis is added index of that array is given first in the tuple
+        #okay after some testing i am still confused so this might be the source of bugs
+        # index where duplicated
+        # if (self.inliers_left.shape[0] > self.potential_overlaping_img_pts.shape[0]):
+        #     common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+        # elif (self.inliers_left.shape[0] < self.potential_overlaping_img_pts.shape[0]):
+        #     common_pts_index, common_pts_index_rev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
+        # else:
+        #     common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+        common_pts_index = []
+        common_pts_index_rev = []
+        for (pt_index, pt) in enumerate(self.potential_overlaping_img_pts):
+            match_index = np.where((self.inliers_left == pt).all(axis=1))[0]
+            if match_index.shape[0] != 0: 
+                common_pts_index.append(match_index[0])
+                common_pts_index_rev.append(pt_index)
+        
+        self.overlapping_pts_nri = self.inliers_right[common_pts_index]
+        self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_rev]
+        #to find unique pts
+        mask = np.ones(self.inliers_left.shape[0], dtype=bool)
+        mask[common_pts_index] = False
+        self.unique_pts_left = self.inliers_left[mask] 
+        self.unique_pts_right = self.inliers_right[mask]   
+        a = np.ones(self.inliers_left.shape[0])
+        a = a[mask]
+
     def process_image(self, filepaths: list[str]):
         print(type(filepaths))
         self.rgb_img1 = cv.imread(filepaths[0], cv.IMREAD_COLOR)
@@ -76,10 +130,44 @@ class TwoView:
         matching_points_from_right.reshape(matching_points_from_right.size//2,2)
         self.inliers_left = matching_points_from_left[mask.ravel() == 1].reshape(-1,2)
         self.inliers_right = matching_points_from_right[mask.ravel() == 1].reshape(-1,2)
+        #maybe throw this variable out/delete these variables
         self.left = matching_points_from_left.reshape(-1,2)
         self.right = matching_points_from_right.reshape(-1,2)
+
+        self.unique_pts_left = self.inliers_left
+        self.unique_pts_right = self.inliers_right
         print(len(matching_points_from_left)) 
     
+    def register_new_view(self) :
+        #Wait, to use pnpRansac we don't have to provide overlapping image points and 3D scene it can figure it out itself?
+        #well think so
+        #let's test it
+        
+        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        success, rvec, tvec, mask = cv.solvePnPRansac(self.potential_overlapping_object_pts,
+                                                         self.overlapping_pts_nri,
+                                                         self.intrinsic_camera_matrix,
+                                                         self.distortion_coefficients,
+                                                         cv.SOLVEPNP_EPNP)
+        self.pts_3D = self.pts_3D.tolist()
+        #so giving all 3D points doesn't work
+        #maybe to run RANSAC you need to have atleast 4 correspondance with any scene point??????
+        #so maybe give 3D object points as per some distance threshold
+       ################################################## 
+        # self.overlapping_pts_nri = self.overlapping_pts_nri.astype('float32')
+        # rvec, tvec, success, inliers = cv.solvePnPRansac(self.pts_3D.T,
+        #                                                  self.overlapping_pts_nri.T,
+        #                                                  self.intrinsic_camera_matrix,
+        #                                                  self.distortion_coefficients,
+        #                                                  cv.SOLVEPNP_EPNP)
+       ################################################## 
+        R = cv.Rodrigues(rvec)[0]
+        self.transfomation_matrix = np.eye(4)
+        self.transfomation_matrix[0:3, 0:3] = R
+        self.transfomation_matrix[0:3, 3:4] = tvec
+        # self.unique_pts_left = self.inliers_left[mask].tolist()
+        # self.unique_pts_right = self.inliers_right[mask].tolist()
+        
     def find_extrinsics_of_camera(self) -> None:
         E, mask = cv.findEssentialMat(self.inliers_left,
                                          self.inliers_right,
@@ -94,8 +182,6 @@ class TwoView:
         
         for (x,y) in self.inliers_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)]
-            # pixel_color = list(map(lambda x: float(x)/255, pixel_color))
-            # pixel_color = np.array([0,255,0], np.uint8)
             self.pts_3D_color.append(pixel_color)
         
         self.transfomation_matrix = np.eye(4)
@@ -108,7 +194,7 @@ class TwoView:
     def find_3D_of_iniliers(self) -> list[list[float]]:
         pts_left_camera_space = list()
         pts_right_camera_space = list()
-        for ptl, ptr in zip(self.inliers_left, self.inliers_right):
+        for ptl, ptr in zip(self.unique_pts_left, self.unique_pts_right):
             pts_left_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptl))
             pts_right_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptr))
         pts_left_camera_space = np.float32(pts_left_camera_space).T
@@ -116,16 +202,20 @@ class TwoView:
         
         proj1 = self.proj1_alt 
         # proj1 is 3*4 matrix that muls 4*4 matrix
-        proj2 = (proj1 @ self.transfomation_matrix)[0:3, 0:4] 
+        proj2 = (self.transfomation_matrix)[0:3, 0:4] 
         # proj2 = (self.transfomation_matrix)[0:3, 0:4] 
         proj3 = np.linalg.inv(self.transfomation_matrix)
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
         self.proj1_alt = proj2
         self.camera_path.append((proj2[:3,3].ravel()).tolist())
+        self.stop += recovered_3D_points_in_homogenous.shape[0] 
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
-        
+        for (x,y) in self.unique_pts_left[:]:
+            pixel_color = self.rgb_img1[int(y),int(x)]
+            self.pts_3D_color.append(pixel_color)
+    
     def find_3D_of_iniliers_alt(self) -> None:
         temp: np.ndarray = np.eye(4)
         # x = K * [R|t] X; proj1 = K * [R|t] 
@@ -148,22 +238,20 @@ class TwoView:
         fig = plt.figure(figsize = (10,10))
         ax = plt.axes(projection='3d')
         
-        start = self.start
-        stop = self.stop
         # ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1, c= self.pts_3D_color[self.start:self.stop])
-        ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1) 
-        ax.scatter(self.camera_path[:,0],self.camera_path[:,1],self.camera_path[:,2])
-        self.start = self.stop
+        ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 10) 
+        # ax.scatter(self.camera_path[:,0],self.camera_path[:,1],self.camera_path[:,2])
         ax.set_title('3D Parametric Plot')
         ax.set_xlabel('x', labelpad=20)
         ax.set_ylabel('y', labelpad=20)
         ax.set_zlabel('z', labelpad=20)
         plt.show()
             
+        # self.start = self.stop
         # plt.scatter(self.pts_3D[:, 0], self.pts_3D[:,1], marker='.')
         self.pts_3D = self.pts_3D.tolist()
         self.camera_path = self.camera_path.tolist()
-        plt.show()
+        # plt.show()
 
     def write_to_ply_file(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
