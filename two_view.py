@@ -66,19 +66,20 @@ class TwoView:
         # all this because of broadcasting rule where newaxis is added index of that array is given first in the tuple
         #okay after some testing i am still confused so this might be the source of bugs
         # index where duplicated
-        # if (self.inliers_left.shape[0] > self.potential_overlaping_img_pts.shape[0]):
-        #     common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
-        # elif (self.inliers_left.shape[0] < self.potential_overlaping_img_pts.shape[0]):
-        #     common_pts_index, common_pts_index_rev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
-        # else:
-        #     common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
-        common_pts_index = []
-        common_pts_index_rev = []
-        for (pt_index, pt) in enumerate(self.potential_overlaping_img_pts):
-            match_index = np.where((self.inliers_left == pt).all(axis=1))[0]
-            if match_index.shape[0] != 0: 
-                common_pts_index.append(match_index[0])
-                common_pts_index_rev.append(pt_index)
+        if (self.inliers_left.shape[0] > self.potential_overlaping_img_pts.shape[0]):
+            common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+        elif (self.inliers_left.shape[0] < self.potential_overlaping_img_pts.shape[0]):
+            common_pts_index, common_pts_index_rev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
+        else:
+            common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+        #same thing as above but readable
+        # common_pts_index = []
+        # common_pts_index_rev = []
+        # for (pt_index, pt) in enumerate(self.potential_overlaping_img_pts):
+        #     match_index = np.where((self.inliers_left == pt).all(axis=1))[0]
+        #     if match_index.shape[0] != 0: 
+        #         common_pts_index.append(match_index[0])
+        #         common_pts_index_rev.append(pt_index)
         
         self.overlapping_pts_nri = self.inliers_right[common_pts_index]
         self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_rev]
