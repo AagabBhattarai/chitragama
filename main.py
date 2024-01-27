@@ -30,7 +30,7 @@ def main():
         sfm.find_overlap()
         sfm.register_new_view()
         sfm.find_3D_of_iniliers()
-        sfm.display()
+        # sfm.display()
         sfm.store_for_next_registration()
 
     sfm.start = 0
