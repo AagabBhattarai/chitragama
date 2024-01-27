@@ -14,7 +14,7 @@ def main():
         matches = sfm.find_good_correspondences()
         sfm.find_inlier_points(matches)
         sfm.find_extrinsics_of_camera()
-        sfm.find_3D_of_iniliers_alt()
+        sfm.find_3D_of_iniliers()
         # sfm.display()
 
     sfm.start = 0

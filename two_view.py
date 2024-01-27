@@ -3,32 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from plyfile import PlyData, PlyElement
 class TwoView:
-    # def __init__(self, filepaths: list[str]) -> None:
-    #     self.rgb_img1 = cv.imread(filepaths[0], cv.IMREAD_COLOR)
-    #     assert self.rgb_img1 is not None, "Image not found in specified file path"
-    #     self.rgb_img2 = cv.imread(filepaths[1], cv.IMREAD_COLOR)
-    #     assert self.rgb_img2 is not None, "Image not found in specified file path"
-    #     self.rgb_img1 = cv.cvtColor(self.rgb_img1, cv.COLOR_BGR2RGB)
-    #     # self.gray_img1 = cv.cvtColor(self.rgb_img1, cv.COLOR_BGR2GRAY)
-    #     # self.gray_img2 = cv.cvtColor(self.rgb_img2, cv.COLOR_BGR2GRAY)
-    #     self.gray_img1 = cv.imread(filepaths[0], cv.IMREAD_GRAYSCALE)     
-    #     self.gray_img2 = cv.imread(filepaths[1], cv.IMREAD_GRAYSCALE)     
-    #     self.sift = cv.SIFT_create()
-    #     self.bf_matcher = cv.BFMatcher()
-    #     #change how you take matrix K, read it from a file or something
-    #     intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
-    #     self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
-    #     self.transfomation_matrix = None
-
-    #     self.kp1 = None
-    #     self.kp2 = None
-    #     self.des1 = None
-    #     self.des2 = None
-    #     self.inliers_left = None
-    #     self.inliers_right = None
-        
-    #     self.pts_3D = None
-    #     self.pts_3D_color = list()
     def __init__(self) -> None:
         self.rgb_img1 = None
         self.rgb_img2 = None
@@ -42,7 +16,9 @@ class TwoView:
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
         self.transfomation_matrix = None
+        self.proj1_alt = temp[:3,:4]
     
+        
         self.kp1 = None
         self.kp2 = None
         self.des1 = None
@@ -54,6 +30,8 @@ class TwoView:
         
         self.pts_3D = []
         self.pts_3D_color = []
+        self.camera_path = []   
+        self.camera_path.append([0,0,0])
         self.stride = []
         self.start = 0
         self.stop = 0
@@ -136,11 +114,15 @@ class TwoView:
         pts_left_camera_space = np.float32(pts_left_camera_space).T
         pts_right_camera_space = np.float32(pts_right_camera_space).T
         
-        temp = np.eye(4)
-        proj1 = temp[0:3, 0:4]
-        proj2 = (self.transfomation_matrix)[0:3, 0:4] 
+        proj1 = self.proj1_alt 
+        # proj1 is 3*4 matrix that muls 4*4 matrix
+        proj2 = (proj1 @ self.transfomation_matrix)[0:3, 0:4] 
+        # proj2 = (self.transfomation_matrix)[0:3, 0:4] 
+        proj3 = np.linalg.inv(self.transfomation_matrix)
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
+        self.proj1_alt = proj2
+        self.camera_path.append((proj2[:3,3].ravel()).tolist())
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
         
@@ -162,7 +144,7 @@ class TwoView:
         
     def display(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
-
+        self.camera_path = np.float32(self.camera_path).reshape(-1,3)
         fig = plt.figure(figsize = (10,10))
         ax = plt.axes(projection='3d')
         
@@ -170,6 +152,7 @@ class TwoView:
         stop = self.stop
         # ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1, c= self.pts_3D_color[self.start:self.stop])
         ax.scatter(self.pts_3D[self.start:self.stop, 0], self.pts_3D[self.start:self.stop,1], self.pts_3D[self.start:self.stop, 2],s= 1) 
+        ax.scatter(self.camera_path[:,0],self.camera_path[:,1],self.camera_path[:,2])
         self.start = self.stop
         ax.set_title('3D Parametric Plot')
         ax.set_xlabel('x', labelpad=20)
@@ -179,6 +162,7 @@ class TwoView:
             
         # plt.scatter(self.pts_3D[:, 0], self.pts_3D[:,1], marker='.')
         self.pts_3D = self.pts_3D.tolist()
+        self.camera_path = self.camera_path.tolist()
         plt.show()
 
     def write_to_ply_file(self):
@@ -190,7 +174,13 @@ class TwoView:
         vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
 
         el = PlyElement.describe(vertex, 'vertex')
-        PlyData([el]).write("test.ply")
+        PlyData([el]).write("point_cloud.ply")
+        self.camera_path = np.float32(self.camera_path).reshape(-1,3)
+        x,y,z =self.camera_path[:, 0], self.camera_path[:,1], self.camera_path[:, 2]
+        pts = list(zip(x,y,z))
+        vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
+        el = PlyElement.describe(vertex, 'vertex')
+        PlyData([el]).write("camera_path.ply")
     # def write_to_ply_file(self, filename="test.ply"):
     #     self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
     #     self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
