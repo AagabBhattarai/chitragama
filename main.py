@@ -1,9 +1,12 @@
 from two_view import TwoView
 import glob
 def main():
-    test_directory = "fountain"
+    # test_directory = "fountain"
+    test_directory = "GustavIIAdolf"
     # filepaths = ["fountain/0000.png","fountain/0001.png"]
-    filepaths = glob.glob(f"{test_directory}/*.png")
+    # filepaths = glob.glob(f"{test_directory}/*.png")
+    filepaths = glob.glob(f"{test_directory}/*.jpg")
+    
     # filepaths = ['fountain\\0005.png', 'fountain\\0004.png', 'fountain\\0006.png', 'fountain\\0007.png', 'fountain\\0003.png', 'fountain\\0002.png', 'fountain\\0001.png', 'fountain\\0000.png']#, 'fountain\\0008.png', 'fountain\\0009.png', 'fountain\\0010.png']
     print(filepaths)
     
@@ -36,6 +39,8 @@ def main():
     sfm.start = 0
     sfm.display()
     sfm.write_to_ply_file()
+    pts = sfm.get_pts_3D()
+    print(pts)
 
 if __name__ == "__main__":
     main()

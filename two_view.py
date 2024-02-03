@@ -11,7 +11,8 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
@@ -99,7 +100,7 @@ class TwoView:
         
         self.rgb_img2 = cv.imread(filepaths[1], cv.IMREAD_COLOR)
         assert self.rgb_img2 is not None, "Image not found in specified file path"
-        self.rgb_img1 = cv.cvtColor(self.rgb_img1, cv.COLOR_BGR2RGB)
+        # self.rgb_img1 = cv.cvtColor(self.rgb_img1, cv.COLOR_BGR2RGB)
         # self.gray_img1 = cv.cvtColor(self.rgb_img1, cv.COLOR_BGR2GRAY)
         # self.gray_img2 = cv.cvtColor(self.rgb_img2, cv.COLOR_BGR2GRAY)
         self.gray_img1 = cv.imread(filepaths[0], cv.IMREAD_GRAYSCALE)     
@@ -184,6 +185,7 @@ class TwoView:
         
         for (x,y) in self.inliers_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)]
+            pixel_color = pixel_color[::-1]
             self.pts_3D_color.append(pixel_color)
         
         self.transfomation_matrix = np.eye(4)
@@ -271,22 +273,7 @@ class TwoView:
         vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
         el = PlyElement.describe(vertex, 'vertex')
         PlyData([el]).write("camera_path.ply")
-    # def write_to_ply_file(self, filename="test.ply"):
-    #     self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
-    #     self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
-    #     x, y, z = self.pts_3D[:, 0], self.pts_3D[:, 1], self.pts_3D[:, 2]
-    #     r, g, b = self.pts_3D_color[:, 0], self.pts_3D_color[:, 1], self.pts_3D_color[:, 2]
-
-    #     pts = list(zip(x, y, z, r, g, b))
-
-    #     vertex = PlyElement.describe(
-    #         [('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')],
-    #         'vertex'
-    #     )
-
-    #     plydata = PlyData([vertex])
-
-    #     for point in pts:
-    #         plydata['vertex'].data.append(point)
-
-    #     plydata.write(filename)
+    
+    def get_pts_3D(self) -> np.ndarray:
+        return self.pts_3D
+        
