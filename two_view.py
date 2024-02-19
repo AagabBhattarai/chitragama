@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 from plyfile import PlyData, PlyElement
+
 class TwoView:
     def __init__(self) -> None:
         self.rgb_img1 = None
@@ -12,12 +13,13 @@ class TwoView:
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
         # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        #K for GUSTAV
         intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
-        self.transfomation_matrix = None
+        self.transformation_matrix = None # this contains R|t for frame being registered
         self.proj1_alt = temp[:3,:4]
         
         self.kp1 = None
@@ -33,6 +35,7 @@ class TwoView:
         self.unique_pts_right = None
         #overlapping pts for newly registered image
         self.overlapping_pts_nri = None
+        self.common_pts_index_nri = None
         
         self.pts_3D = []
         self.pts_3D_color = []
@@ -68,30 +71,34 @@ class TwoView:
         #okay after some testing i am still confused so this might be the source of bugs
         # index where duplicated
         if (self.inliers_left.shape[0] > self.potential_overlaping_img_pts.shape[0]):
-            common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+            common_pts_index_prev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
         elif (self.inliers_left.shape[0] < self.potential_overlaping_img_pts.shape[0]):
-            common_pts_index, common_pts_index_rev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
+            common_pts_index, common_pts_index_prev = np.where((self.inliers_left[:, None] == self.potential_overlaping_img_pts).all(-1))
         else:
-            common_pts_index_rev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
+            common_pts_index_prev, common_pts_index = np.where((self.inliers_left == self.potential_overlaping_img_pts[:, None]).all(-1))
         
+        assert common_pts_index.shape[0] == common_pts_index_prev.shape[0], "Index lengths for overlapp don't match"
         #same thing as above but readable
         # common_pts_index = []
-        # common_pts_index_rev = []
+        # common_pts_index_prev = []
         # for (pt_index, pt) in enumerate(self.potential_overlaping_img_pts):
         #     match_index = np.where((self.inliers_left == pt).all(axis=1))[0]
         #     if match_index.shape[0] != 0: 
         #         common_pts_index.append(match_index[0])
-        #         common_pts_index_rev.append(pt_index)
+        #         common_pts_index_prev.append(pt_index)
         
         self.overlapping_pts_nri = self.inliers_right[common_pts_index]
-        self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_rev]
+        # self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_prev]
         #to find unique pts
         mask = np.ones(self.inliers_left.shape[0], dtype=bool)
         mask[common_pts_index] = False
         self.unique_pts_left = self.inliers_left[mask] 
         self.unique_pts_right = self.inliers_right[mask]   
-        a = np.ones(self.inliers_left.shape[0])
-        a = a[mask]
+        # a = np.ones(self.inliers_left.shape[0])
+        # a = a[mask]
+        self.common_pts_index_nri = common_pts_index
+        self.common_pts_index_prev = common_pts_index_prev
+        
 
     def process_image(self, filepaths: list[str]):
         print(type(filepaths))
@@ -115,7 +122,7 @@ class TwoView:
         #Lowe's test
         good = []
         for m,n in matches:
-            if m.distance < 0.75*n.distance:
+            if m.distance < 0.7*n.distance:
                 good.append(m)
         
         return good
@@ -145,14 +152,39 @@ class TwoView:
         #Wait, to use pnpRansac we don't have to provide overlapping image points and 3D scene it can figure it out itself?
         #well think so
         #let's test it
+        a= self.potential_overlapping_object_pts.shape
+        overlapping_object_pts = self.potential_overlapping_object_pts[self.common_pts_index_prev].reshape(-1, 3)
+        success, rvec, tvec, mask = cv.solvePnPRansac(overlapping_object_pts,
+                                                        self.overlapping_pts_nri,
+                                                        self.intrinsic_camera_matrix,
+                                                        self.distortion_coefficients,
+                                                        cv.SOLVEPNP_EPNP)
         
-        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
-        success, rvec, tvec, mask = cv.solvePnPRansac(self.potential_overlapping_object_pts,
-                                                         self.overlapping_pts_nri,
-                                                         self.intrinsic_camera_matrix,
-                                                         self.distortion_coefficients,
-                                                         cv.SOLVEPNP_EPNP)
-        self.pts_3D = self.pts_3D.tolist()
+        #Calculate Reprojection error for the overlapping points
+    
+        print("PNP")
+        pts_3D = overlapping_object_pts[mask]
+        common_og_pts = self.overlapping_pts_nri[mask].reshape(-1,2)
+        reproj_pts, _ = cv.projectPoints(pts_3D, rvec, tvec, self.intrinsic_camera_matrix,distCoeffs=None)
+        reproj_pts = reproj_pts.reshape(-1,2) 
+        print(f"Reprojected points:\n{reproj_pts[:10,:]}")
+        print(f"Original points:\n{common_og_pts[:10,:]}")
+        error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
+        print(f"Error: {error}")
+
+        original_length = overlapping_object_pts.shape[0]
+        # outlier_index = [x for x in range(original_length) if x not in mask]
+        # print(outlier_index)
+        print(mask.shape[0])
+        # print(original_length)
+        # outlier_pts = overlapping_object_pts[outlier_index]
+        
+        outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
+        outlier_mask[mask] = False;
+        outlier_pts = overlapping_object_pts[outlier_mask]
+        if len(outlier_pts) != 0: 
+            self.update_known_outlier_pts(outlier_pts)
+        # i = input("wait") 
         #so giving all 3D points doesn't work
         #maybe to run RANSAC you need to have atleast 4 correspondance with any scene point??????
         #so maybe give 3D object points as per some distance threshold
@@ -165,12 +197,38 @@ class TwoView:
         #                                                  cv.SOLVEPNP_EPNP)
        ################################################## 
         R = cv.Rodrigues(rvec)[0]
-        self.transfomation_matrix = np.eye(4)
-        self.transfomation_matrix[0:3, 0:3] = R
-        self.transfomation_matrix[0:3, 3:4] = tvec
+        self.transformation_matrix = np.eye(4)
+        self.transformation_matrix[0:3, 0:3] = R
+        self.transformation_matrix[0:3, 3:4] = tvec
         # self.unique_pts_left = self.inliers_left[mask].tolist()
         # self.unique_pts_right = self.inliers_right[mask].tolist()
+    
+    def update_known_outlier_pts(self, outlier_pts):
+        self.pts_3D = np.float32(self.pts_3D)
+        self.pts_3D_color = np.float32(self.pts_3D_color)
         
+        print(self.pts_3D.shape)
+        print(outlier_pts.shape)
+        
+        #here global means that this is index of outlier points for whole of object points
+        _, global_outlier_indices= np.where((self.pts_3D == outlier_pts[:, None]).all(-1))
+        length = self.pts_3D.shape[0]
+        global_inlier_mask = np.ones(length, dtype=bool)
+        global_inlier_mask[global_outlier_indices] = False
+        self.pts_3D = self.pts_3D[global_inlier_mask]
+        self.pts_3D_color = self.pts_3D_color[global_inlier_mask]
+        change = self.stop - self.pts_3D.shape[0]
+        self.pts_3D = self.pts_3D.tolist()
+        self.pts_3D_color = self.pts_3D_color.tolist()
+        print((outlier_pts))
+        
+        # global_inlier_indices = [x for x in range(length) if x not in global_outlier_indices]
+        # unique_outlier_indices = set(global_outlier_indices.tolist())
+        assert self.start==self.stop, "Stride variables unmatched"
+        self.stop = self.stop - change
+        self.start = self.stop
+         
+    
     def find_extrinsics_of_camera(self) -> None:
         E, mask = cv.findEssentialMat(self.inliers_left,
                                          self.inliers_right,
@@ -183,14 +241,14 @@ class TwoView:
                                             self.intrinsic_camera_matrix,
                                             mask=mask)
         
-        for (x,y) in self.inliers_left[:]:
-            pixel_color = self.rgb_img1[int(y),int(x)]
-            pixel_color = pixel_color[::-1]
-            self.pts_3D_color.append(pixel_color)
+        # for (x,y) in self.inliers_left[:]:
+        #     pixel_color = self.rgb_img1[int(y),int(x)]
+        #     pixel_color = pixel_color[::-1]
+        #     self.pts_3D_color.append(pixel_color)
         
-        self.transfomation_matrix = np.eye(4)
-        self.transfomation_matrix[0:3, 0:3] = R
-        self.transfomation_matrix[0:3, 3:4] = t
+        self.transformation_matrix = np.eye(4)
+        self.transformation_matrix[0:3, 0:3] = R
+        self.transformation_matrix[0:3, 3:4] = t
 
     def to_camera_coordinate(self, K, point: list[float]) -> list[float]:
         normalized = [  (point[0] - K[0,2]) / K[0,0] ,  (point[1] - K[1,2])/K[1,1] ];
@@ -206,18 +264,19 @@ class TwoView:
         
         proj1 = self.proj1_alt 
         # proj1 is 3*4 matrix that muls 4*4 matrix
-        proj2 = (self.transfomation_matrix)[0:3, 0:4] 
-        # proj2 = (self.transfomation_matrix)[0:3, 0:4] 
-        proj3 = np.linalg.inv(self.transfomation_matrix)
+        proj2 = (self.transformation_matrix)[0:3, 0:4] 
+        # proj2 = (self.transformation_matrix)[0:3, 0:4] 
+        proj3 = np.linalg.inv(self.transformation_matrix)
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
         self.proj1_alt = proj2
         self.camera_path.append((-proj2[:3,:3].T @ proj2[:3,3]).tolist())
         self.stop += recovered_3D_points_in_homogenous.shape[0] 
+        
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
         for (x,y) in self.unique_pts_left[:]:
-            pixel_color = self.rgb_img1[int(y),int(x)]
+            pixel_color = self.rgb_img1[int(y),int(x)][::-1]
             self.pts_3D_color.append(pixel_color)
     
     def find_3D_of_iniliers_alt(self) -> None:
@@ -226,7 +285,7 @@ class TwoView:
         # proj1 = self.intrinsic_camera_matrix @ temp[:3, :4]
         proj1 = self.proj1
         # x' = K*[R|t] X'; X= X';;;TO DEFINE PROPERLY  
-        proj2 = proj1 @ self.transfomation_matrix
+        proj2 = proj1 @ self.transformation_matrix
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
@@ -236,6 +295,28 @@ class TwoView:
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
         
+    
+    def reprojection_error(self):
+        #takes newly calculated 3D pts and 2D correspondences and calculate reprojection error
+        #3D points are assumed to be in Eucledian Space
+        original_pts = self.unique_pts_right
+        pts_3D = self.pts_3D[self.start: self.stop]
+        pts_3D = np.float32(pts_3D).reshape(-1,3)
+        R = self.transformation_matrix[0:3, 0:3]
+        t = self.transformation_matrix[0:3, 3]
+        
+        rvec, _ = cv.Rodrigues(R)
+        reproj_pts, _ = cv.projectPoints(pts_3D, rvec, t, self.intrinsic_camera_matrix,distCoeffs=None)
+        reproj_pts = reproj_pts.reshape(-1,2) 
+        # print(f"Reprojected points:\n{reproj_pts}")
+        # print(f"Original points:\n{original_pts}")
+        error = cv.norm(original_pts, reproj_pts, normType=cv.NORM_L2)
+        # print(f"Error: {error}")
+        # i = input("wait") 
+        
+        
+    
+    
     def display(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         self.camera_path = np.float32(self.camera_path).reshape(-1,3)

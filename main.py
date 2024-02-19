@@ -20,11 +20,12 @@ def main():
     sfm.find_inlier_points(matches)
     sfm.find_extrinsics_of_camera()
     sfm.find_3D_of_iniliers()
-    sfm.display()
+    sfm.reprojection_error()
+    # sfm.display()
     sfm.store_for_next_registration()
     
-    for im1, im2 in zip(filepaths, filepaths[1:]):
-        
+    for i, (im1, im2) in enumerate(zip(filepaths, filepaths[1:])):
+        print("\n\nITERATION:", i)
         sfm.process_image([im1, im2])
         matches = sfm.find_good_correspondences()
         sfm.find_inlier_points(matches)
@@ -33,6 +34,7 @@ def main():
         sfm.find_overlap()
         sfm.register_new_view()
         sfm.find_3D_of_iniliers()
+        sfm.reprojection_error()
         # sfm.display()
         sfm.store_for_next_registration()
 
