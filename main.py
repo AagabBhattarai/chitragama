@@ -1,11 +1,10 @@
 from two_view import TwoView
 import glob
 def main():
-    # test_directory = "fountain"
-    test_directory = "GustavIIAdolf"
-    # filepaths = ["fountain/0000.png","fountain/0001.png"]
-    # filepaths = glob.glob(f"{test_directory}/*.png")
-    filepaths = glob.glob(f"{test_directory}/*.jpg")
+    test_directory = "fountain"
+    # test_directory = "GustavIIAdolf"
+    filepaths = glob.glob(f"{test_directory}/*.png")
+    # filepaths = glob.glob(f"{test_directory}/*.jpg")
     
     # filepaths = ['fountain\\0005.png', 'fountain\\0004.png', 'fountain\\0006.png', 'fountain\\0007.png', 'fountain\\0003.png', 'fountain\\0002.png', 'fountain\\0001.png', 'fountain\\0000.png']#, 'fountain\\0008.png', 'fountain\\0009.png', 'fountain\\0010.png']
     print(filepaths)
@@ -26,6 +25,8 @@ def main():
     
     for i, (im1, im2) in enumerate(zip(filepaths, filepaths[1:])):
         print("\n\nITERATION:", i)
+        sfm.update_frame_no_value(i+2)
+        
         sfm.process_image([im1, im2])
         matches = sfm.find_good_correspondences()
         sfm.find_inlier_points(matches)
@@ -37,6 +38,7 @@ def main():
         sfm.reprojection_error()
         # sfm.display()
         sfm.store_for_next_registration()
+        sfm.update_bundle_stop()
 
     sfm.start = 0
     sfm.display()

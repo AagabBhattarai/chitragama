@@ -2,7 +2,8 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 from plyfile import PlyData, PlyElement
-
+from frames import Frames
+from bundle_adjustment import Bundle_Adjusment
 class TwoView:
     def __init__(self) -> None:
         self.rgb_img1 = None
@@ -12,14 +13,14 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
-        intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
-        self.transformation_matrix = None # this contains R|t for frame being registered
+        self.transformation_matrix = np.eye(4) # this contains R|t for frame being registered
         self.proj1_alt = temp[:3,:4]
         
         self.kp1 = None
@@ -49,6 +50,44 @@ class TwoView:
         self.potential_overlaping_img_pts = None
         #misnomer since this variable is used for storing overlapping 3D points
         self.potential_overlapping_object_pts = None
+        
+        self.frame_info_handler:Frames = Frames()
+        self.frame_info_handler.frame1_no = 0
+        self.frame_info_handler.frame2_no = 0
+        self.store_camera_param()
+        
+        self.bundle_adjuster = Bundle_Adjusment()
+        self.bundle_start = 0
+        self.bundle_stop = 0 #equates to no. of 3D observations
+        self.bundle_adjustment_time = True
+        
+
+    def update_frame_no_value(self, n):
+        self.frame_info_handler.frame1_no = n-2
+        self.frame_info_handler.frame2_no = n-1
+        self.frame_info_handler.frame3_no = n
+        
+        
+    def update_bundle_stop(self):
+        self.bundle_stop = self.stop
+    
+    def reset_for_BA(self):
+        self.bundle_start = self.bundle_stop
+    
+    def do_bundle_adjustment(self):
+        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        self.frame_info_handler.points_2D = np.float32(self.frame_info_handler.points_2D).reshape(-1,2)
+        self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1,10)
+        self.frame_info_handler.camera_indices = np.int32(self.frame_info_handler.camera_indices).ravel()
+        self.frame_info_handler.point_indices = np.int32(self.frame_info_handler.point_indices).ravel()
+        
+        self.bundle_adjuster.do_BA(self.pts_3D[self.bundle_start:self.bundle_stop, :],
+                                    self.frame_info_handler.camera_params,
+                                    self.frame_info_handler.camera_indices,
+                                    self.frame_info_handler.point_indices,
+                                    self.frame_info_handler.points_2D)
+        
+
     
     def store_for_next_registration(self):
         self.potential_overlaping_img_pts = self.unique_pts_right.copy()
@@ -58,8 +97,13 @@ class TwoView:
         self.pts_3D = self.pts_3D.tolist() 
         #setting for next set of registraion????
         self.start = self.stop 
+        # #store camera param of frame with higher index or right frame
+        # self.store_camera_param()
+        #store both frames/i.e feature points are stored
+        self.store_points2d()
     
     def find_overlap(self) :
+
         #so at this stage of the pipeline:
         #self.inliers_left contains correspondance for the view with new registration 
         #   which should also have overlap with self.potential_overlapping_img_pts
@@ -88,6 +132,7 @@ class TwoView:
         #         common_pts_index_prev.append(pt_index)
         
         self.overlapping_pts_nri = self.inliers_right[common_pts_index]
+
         # self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_prev]
         #to find unique pts
         mask = np.ones(self.inliers_left.shape[0], dtype=bool)
@@ -146,7 +191,7 @@ class TwoView:
 
         self.unique_pts_left = self.inliers_left
         self.unique_pts_right = self.inliers_right
-        print(len(matching_points_from_left)) 
+        print("No. of unique pts:", len(mask)) 
     
     def register_new_view(self) :
         #Wait, to use pnpRansac we don't have to provide overlapping image points and 3D scene it can figure it out itself?
@@ -172,36 +217,25 @@ class TwoView:
         error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
         print(f"Error: {error}")
 
-        original_length = overlapping_object_pts.shape[0]
-        # outlier_index = [x for x in range(original_length) if x not in mask]
-        # print(outlier_index)
+        #remove outliers from 2D observations as well
+
         print(mask.shape[0])
-        # print(original_length)
-        # outlier_pts = overlapping_object_pts[outlier_index]
-        
         outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
         outlier_mask[mask] = False;
         outlier_pts = overlapping_object_pts[outlier_mask]
         if len(outlier_pts) != 0: 
             self.update_known_outlier_pts(outlier_pts)
-        # i = input("wait") 
-        #so giving all 3D points doesn't work
-        #maybe to run RANSAC you need to have atleast 4 correspondance with any scene point??????
-        #so maybe give 3D object points as per some distance threshold
-       ################################################## 
-        # self.overlapping_pts_nri = self.overlapping_pts_nri.astype('float32')
-        # rvec, tvec, success, inliers = cv.solvePnPRansac(self.pts_3D.T,
-        #                                                  self.overlapping_pts_nri.T,
-        #                                                  self.intrinsic_camera_matrix,
-        #                                                  self.distortion_coefficients,
-        #                                                  cv.SOLVEPNP_EPNP)
-       ################################################## 
+       
         R = cv.Rodrigues(rvec)[0]
-        self.transformation_matrix = np.eye(4)
+        # self.transformation_matrix = np.eye(4)
         self.transformation_matrix[0:3, 0:3] = R
         self.transformation_matrix[0:3, 3:4] = tvec
-        # self.unique_pts_left = self.inliers_left[mask].tolist()
-        # self.unique_pts_right = self.inliers_right[mask].tolist()
+        
+        #store camera param of frame with higher index or right frame
+        self.update_points2d(mask)
+        self.store_camera_param()
+        
+        
     
     def update_known_outlier_pts(self, outlier_pts):
         self.pts_3D = np.float32(self.pts_3D)
@@ -212,6 +246,7 @@ class TwoView:
         
         #here global means that this is index of outlier points for whole of object points
         _, global_outlier_indices= np.where((self.pts_3D == outlier_pts[:, None]).all(-1))
+        
         length = self.pts_3D.shape[0]
         global_inlier_mask = np.ones(length, dtype=bool)
         global_inlier_mask[global_outlier_indices] = False
@@ -222,13 +257,54 @@ class TwoView:
         self.pts_3D_color = self.pts_3D_color.tolist()
         print((outlier_pts))
         
+        #use remove the outlier indices from point_indices 
+        self.update_point_indices(global_outlier_indices)
         # global_inlier_indices = [x for x in range(length) if x not in global_outlier_indices]
         # unique_outlier_indices = set(global_outlier_indices.tolist())
         assert self.start==self.stop, "Stride variables unmatched"
         self.stop = self.stop - change
         self.start = self.stop
+        self.update_bundle_stop()
          
+    def update_point_indices(self, global_outlier_indices):
+        self.frame_info_handler.point_indices = [x - sum(1 for j in global_outlier_indices if j < x) 
+                                             for x in self.frame_info_handler.point_indices 
+                                             if x not in global_outlier_indices]
+
     
+    def update_points2d(self, inlier_mask_index):
+        length = len(self.common_pts_index_prev)
+        outlier_mask = np.ones(length, dtype=bool)
+        outlier_mask[inlier_mask_index] = False
+        outlier_index = self.common_pts_index_prev[outlier_mask]
+        #now find total inliers using outlier_index ( inlier for overlapp -> outlier for whole -> inlier for whole)
+        length_i = len(self.potential_overlaping_img_pts)
+        global_inlier_mask = np.ones(length_i, dtype=bool)
+        global_inlier_mask[outlier_index] = False
+        self.frame_info_handler.frame1 = self.frame_info_handler.frame1[global_inlier_mask].reshape(-1,2)
+        self.frame_info_handler.frame2 = self.frame_info_handler.frame2[global_inlier_mask].reshape(-1,2)
+
+        self.add_points2d(self.frame_info_handler.frame1)
+        n = len(self.frame_info_handler.frame1)
+        self.add_camera_indices(self.frame_info_handler.frame1_no,n)
+        
+        self.add_points2d(self.frame_info_handler.frame2)
+        n = len(self.frame_info_handler.frame2)
+        self.add_camera_indices(self.frame_info_handler.frame2_no, n)
+
+        if(self.bundle_adjustment_time):
+            self.do_bundle_adjustment()
+        
+        #inlier within overlapp indexes
+        inlier_for_overlapp = self.common_pts_index_prev[inlier_mask_index]
+        self.add_point_indices(inlier_for_overlapp.ravel().tolist())
+        
+        self.add_frame(self.overlapping_pts_nri[inlier_mask_index].reshape(-1,2))
+        self.add_points2d(self.frame_info_handler.frame3)
+        n = len(self.frame_info_handler.frame3)
+        self.add_camera_indices(self.frame_info_handler.frame3_no, n)
+        
+
     def find_extrinsics_of_camera(self) -> None:
         E, mask = cv.findEssentialMat(self.inliers_left,
                                          self.inliers_right,
@@ -236,6 +312,8 @@ class TwoView:
                                          cv.RANSAC, prob=0.999, threshold=1.0)
         j = [x for x in mask if x ==1]
         print(len(j))
+        self.unique_pts_left = self.unique_pts_left[mask.ravel() == 1].reshape(-1,2)
+        self.unique_pts_right = self.unique_pts_right[mask.ravel() == 1 ].reshape(-1,2)
         _, R, t, _ =  cv.recoverPose(E,  self.inliers_left,
                                             self.inliers_right,
                                             self.intrinsic_camera_matrix,
@@ -246,9 +324,11 @@ class TwoView:
         #     pixel_color = pixel_color[::-1]
         #     self.pts_3D_color.append(pixel_color)
         
-        self.transformation_matrix = np.eye(4)
+        # self.transformation_matrix = np.eye(4)
         self.transformation_matrix[0:3, 0:3] = R
         self.transformation_matrix[0:3, 3:4] = t
+        #store camera param of frame with higher index or right frame
+        self.store_camera_param()
 
     def to_camera_coordinate(self, K, point: list[float]) -> list[float]:
         normalized = [  (point[0] - K[0,2]) / K[0,0] ,  (point[1] - K[1,2])/K[1,1] ];
@@ -266,35 +346,27 @@ class TwoView:
         # proj1 is 3*4 matrix that muls 4*4 matrix
         proj2 = (self.transformation_matrix)[0:3, 0:4] 
         # proj2 = (self.transformation_matrix)[0:3, 0:4] 
-        proj3 = np.linalg.inv(self.transformation_matrix)
+        # proj3 = np.linalg.inv(self.transformation_matrix)
         
         recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
-        self.proj1_alt = proj2
+        self.proj1_alt = proj2.copy()
         self.camera_path.append((-proj2[:3,:3].T @ proj2[:3,3]).tolist())
         self.stop += recovered_3D_points_in_homogenous.shape[0] 
+        
         
         for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
             self.pts_3D.append(pts)
         for (x,y) in self.unique_pts_left[:]:
             pixel_color = self.rgb_img1[int(y),int(x)][::-1]
             self.pts_3D_color.append(pixel_color)
+        
+        #set point indices for 3D points
+        self.set_point_indices()
+        
+        #bundle adjustment done after going through two triangulations
+        self.bundle_adjustment_time = not self.bundle_adjustment_time
+        
     
-    def find_3D_of_iniliers_alt(self) -> None:
-        temp: np.ndarray = np.eye(4)
-        # x = K * [R|t] X; proj1 = K * [R|t] 
-        # proj1 = self.intrinsic_camera_matrix @ temp[:3, :4]
-        proj1 = self.proj1
-        # x' = K*[R|t] X'; X= X';;;TO DEFINE PROPERLY  
-        proj2 = proj1 @ self.transformation_matrix
-        
-        recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
-        recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, self.inliers_left.T, self.inliers_right.T).T
-        
-        self.proj1 = proj2
-        self.stop += recovered_3D_points_in_homogenous.shape[0] 
-        for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
-            self.pts_3D.append(pts)
-        
     
     def reprojection_error(self):
         #takes newly calculated 3D pts and 2D correspondences and calculate reprojection error
@@ -308,8 +380,9 @@ class TwoView:
         rvec, _ = cv.Rodrigues(R)
         reproj_pts, _ = cv.projectPoints(pts_3D, rvec, t, self.intrinsic_camera_matrix,distCoeffs=None)
         reproj_pts = reproj_pts.reshape(-1,2) 
-        # print(f"Reprojected points:\n{reproj_pts}")
-        # print(f"Original points:\n{original_pts}")
+        # print(f"Reprojected points:\n{reproj_pts[:10, :]}")
+        # print(f"Original points:\n{original_pts[:10, :]}")
+        # print(f"\nTransformation Matrix:\n{self.transformation_matrix}")
         error = cv.norm(original_pts, reproj_pts, normType=cv.NORM_L2)
         # print(f"Error: {error}")
         # i = input("wait") 
@@ -317,6 +390,39 @@ class TwoView:
         
     
     
+    def store_camera_param(self):
+        R = self.transformation_matrix[ :3, :3]
+        rvec, _ = cv.Rodrigues(R)
+        t = self.transformation_matrix[:3, 3]
+
+        intrinsics = [self.intrinsic_camera_matrix[0][0], self.intrinsic_camera_matrix[0][2]
+                    , self.intrinsic_camera_matrix[1][1],self.intrinsic_camera_matrix[1][2]]
+        
+        self.frame_info_handler.camera_params.extend(rvec.ravel().tolist())
+        self.frame_info_handler.camera_params.extend(t.tolist())  
+        self.frame_info_handler.camera_params.extend(intrinsics) 
+    
+    def store_points2d(self):
+        self.frame_info_handler.frame1 = self.unique_pts_left.copy()
+        self.frame_info_handler.frame2 = self.unique_pts_right.copy()
+    def add_frame(self, frame):
+        self.frame_info_handler.frame3 = frame.copy()
+
+    def add_points2d(self,frame):
+        self.frame_info_handler.points_2D.extend(frame.tolist())
+        
+    def set_point_indices(self):
+        assert self.start != self.stop, "Stride variables are equal, they should be different"
+        point_indices = [(x-self.bundle_start) for x in range(self.start, self.stop)]
+        self.frame_info_handler.point_indices.extend(point_indices)
+        self.frame_info_handler.point_indices.extend(point_indices)
+    
+    def add_point_indices(self, index):
+        self.frame_info_handler.point_indices.extend(index)
+    
+    def add_camera_indices(self, index, n):
+        self.frame_info_handler.camera_indices.extend([index] * n)
+
     def display(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         self.camera_path = np.float32(self.camera_path).reshape(-1,3)
@@ -357,4 +463,5 @@ class TwoView:
     
     def get_pts_3D(self) -> np.ndarray:
         return self.pts_3D
+    
         
