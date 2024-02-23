@@ -81,7 +81,7 @@ class Bundle_Adjusment:
         
         x0 = np.hstack((camera_params.ravel(), points_3d.ravel()))
         f0 = self.fun(x0, n_cameras, n_points, camera_indices, point_indices, points_2d)
-        print("\nRes Error:\n",sum(f0)/m)
+        print("\nRes Error:\n",(sum(f0**2)**0.5)/m)
         plt.plot(f0)
         plt.show()
         
@@ -89,7 +89,11 @@ class Bundle_Adjusment:
         res = least_squares(self.fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', ftol=1e-4, method='trf',
                     args=(n_cameras, n_points, camera_indices, point_indices, points_2d))
         
+
+        print("\nOptimized Res Error:\n",(sum(res.fun**2)**0.5)/m)
         plt.plot(res.fun)
+        for pt in res.x[:10]:
+            print(pt)
         plt.show()
         
         # def reprojection_error(self):

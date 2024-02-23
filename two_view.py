@@ -223,6 +223,7 @@ class TwoView:
         outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
         outlier_mask[mask] = False;
         outlier_pts = overlapping_object_pts[outlier_mask]
+        print(outlier_pts)
         if len(outlier_pts) != 0: 
             self.update_known_outlier_pts(outlier_pts)
        
@@ -255,7 +256,7 @@ class TwoView:
         change = self.stop - self.pts_3D.shape[0]
         self.pts_3D = self.pts_3D.tolist()
         self.pts_3D_color = self.pts_3D_color.tolist()
-        print((outlier_pts))
+        # print((outlier_pts))
         
         #use remove the outlier indices from point_indices 
         self.update_point_indices(global_outlier_indices)
@@ -267,6 +268,8 @@ class TwoView:
         self.update_bundle_stop()
          
     def update_point_indices(self, global_outlier_indices):
+        global_outlier_indices = set(global_outlier_indices)
+        # n = sum(1 for j in global_outlier_indices if j < 630)
         self.frame_info_handler.point_indices = [x - sum(1 for j in global_outlier_indices if j < x) 
                                              for x in self.frame_info_handler.point_indices 
                                              if x not in global_outlier_indices]
