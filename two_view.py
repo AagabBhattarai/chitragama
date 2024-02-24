@@ -13,7 +13,7 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        intrinsic_camera_matrix = [[620.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
         # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
@@ -86,6 +86,12 @@ class TwoView:
                                     self.frame_info_handler.camera_indices,
                                     self.frame_info_handler.point_indices,
                                     self.frame_info_handler.points_2D)
+        
+        self.frame_info_handler.points_2D =  (self.frame_info_handler.points_2D).ravel().tolist()
+        self.frame_info_handler.camera_params =  (self.frame_info_handler.camera_params).ravel().tolist()
+        self.frame_info_handler.camera_indices = (self.frame_info_handler.camera_indices).tolist()
+        self.frame_info_handler.point_indices = (self.frame_info_handler.point_indices).ravel().tolist()
+        
         
 
     
@@ -197,7 +203,7 @@ class TwoView:
         #Wait, to use pnpRansac we don't have to provide overlapping image points and 3D scene it can figure it out itself?
         #well think so
         #let's test it
-        a= self.potential_overlapping_object_pts.shape
+        # a= self.potential_overlapping_object_pts.shape
         overlapping_object_pts = self.potential_overlapping_object_pts[self.common_pts_index_prev].reshape(-1, 3)
         success, rvec, tvec, mask = cv.solvePnPRansac(overlapping_object_pts,
                                                         self.overlapping_pts_nri,
@@ -295,8 +301,8 @@ class TwoView:
         n = len(self.frame_info_handler.frame2)
         self.add_camera_indices(self.frame_info_handler.frame2_no, n)
 
-        if(self.bundle_adjustment_time):
-            self.do_bundle_adjustment()
+             # if(self.bundle_adjustment_time):
+        #     self.do_bundle_adjustment()
         
         #inlier within overlapp indexes
         inlier_for_overlapp = self.common_pts_index_prev[inlier_mask_index]
@@ -322,10 +328,6 @@ class TwoView:
                                             self.intrinsic_camera_matrix,
                                             mask=mask)
         
-        # for (x,y) in self.inliers_left[:]:
-        #     pixel_color = self.rgb_img1[int(y),int(x)]
-        #     pixel_color = pixel_color[::-1]
-        #     self.pts_3D_color.append(pixel_color)
         
         # self.transformation_matrix = np.eye(4)
         self.transformation_matrix[0:3, 0:3] = R
