@@ -60,7 +60,13 @@ class TwoView:
         self.bundle_start = 0
         self.bundle_stop = 0 #equates to no. of 3D observations
         self.bundle_adjustment_time = True
-        
+        self.b_camera_params_start = 0 #bundle camera start
+        self.b_camera_params_stop = 3 # value 3 because only 3 cameras are used for BA
+        self.n_unique_pts_prev_frame = 0
+        self.ba_point2d_start = 0
+        # self.ba_point2d_stop = 0
+        self.bundle_size = 3
+        self.ba_reset = False
 
     def update_frame_no_value(self, n):
         self.frame_info_handler.frame1_no = n-2
@@ -71,28 +77,91 @@ class TwoView:
     def update_bundle_stop(self):
         self.bundle_stop = self.stop
     
+    def update_camera_intrinsic(self):
+        #maybe as this is monocular sfm but here we have BA as if we have multiple cameras
+        #so here lazily average value of from each optimization is taken
+        fx = 0
+        fy = 0
+        cx = 0
+        cy = 0
+        self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1,10)
+        intrinsic_param_sum  = np.sum(self.frame_info_handler.camera_params[:, 6:], axis=0)
+        new_intrinsic_params = (intrinsic_param_sum/self.bundle_size).copy()
+        self.intrinsic_camera_matrix[0][0] = new_intrinsic_params[0]
+        self.intrinsic_camera_matrix[0][2] = new_intrinsic_params[1]
+        self.intrinsic_camera_matrix[1][1] = new_intrinsic_params[2]
+        self.intrinsic_camera_matrix[1][2] = new_intrinsic_params[3]
+        self.frame_info_handler.camera_params = self.frame_info_handler.camera_params.ravel().tolist()
+        
+        
     def reset_for_BA(self):
-        self.bundle_start = self.bundle_stop
+        #3D points
+        self.bundle_start = self.bundle_stop - self.n_unique_pts_prev_frame
+        #2D points and indices for BA access
+        total_2D_points = len(self.frame_info_handler.points_2D)
+        self.ba_point2d_start = total_2D_points - (2*self.n_unique_pts_prev_frame)
+        #camera params
+        self.update_camera_intrinsic()
+        #update 2D points and indices for Repose calculation for overlapp region
+        self.update_pts2d_pindex_cindex()
+        self.b_camera_params_start +=1
+        self.b_camera_params_stop +=1
     
+    def update_pts2d_pindex_cindex(self):
+        # self.frame_info_handler.point_indices = self.frame_info_handler.point_indices[:self.ba_point2d_start]
+        self.frame_info_handler.points_2D = self.frame_info_handler.points_2D[:self.ba_point2d_start]
+        self.frame_info_handler.camera_indices = self.frame_info_handler.camera_indices[:self.ba_point2d_start]
+        
+    def alter_camera_indices_pre_ba(self, indices):
+        indices = indices.ravel().tolist()
+        uniq_indices = sorted(set(indices))
+        mapping = {value: i for i, value in enumerate(uniq_indices)}
+        new_indices = [mapping[x] for x in indices]
+        new_indices = np.int32(new_indices).ravel()
+        return new_indices
+
     def do_bundle_adjustment(self):
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        
         self.frame_info_handler.points_2D = np.float32(self.frame_info_handler.points_2D).reshape(-1,2)
         self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1,10)
         self.frame_info_handler.camera_indices = np.int32(self.frame_info_handler.camera_indices).ravel()
         self.frame_info_handler.point_indices = np.int32(self.frame_info_handler.point_indices).ravel()
         
-        self.bundle_adjuster.do_BA(self.pts_3D[self.bundle_start:self.bundle_stop, :],
-                                    self.frame_info_handler.camera_params,
-                                    self.frame_info_handler.camera_indices,
-                                    self.frame_info_handler.point_indices,
-                                    self.frame_info_handler.points_2D)
+        camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ])
+        opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
+                                            self.pts_3D[self.bundle_start:self.bundle_stop, :],
+                                            self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
+                                            camera_indices,
+                                            self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
+                                            self.frame_info_handler.points_2D[self.ba_point2d_start:, :]
+                                            )
         
-        self.frame_info_handler.points_2D =  (self.frame_info_handler.points_2D).ravel().tolist()
-        self.frame_info_handler.camera_params =  (self.frame_info_handler.camera_params).ravel().tolist()
+        self.pts_3D[self.bundle_start: self.bundle_stop] = opt_pts_3D.reshape(-1,3).copy()
+        self.pts_3D = self.pts_3D.tolist()
+
+        self.frame_info_handler.camera_params[self.b_camera_params_start: self.b_camera_params_stop,]   = opt_camera_params.reshape(-1,10).copy()
+        self.frame_info_handler.camera_params = self.frame_info_handler.camera_params.ravel().tolist()
+        
+        self.frame_info_handler.points_2D =  (self.frame_info_handler.points_2D).tolist()
         self.frame_info_handler.camera_indices = (self.frame_info_handler.camera_indices).tolist()
         self.frame_info_handler.point_indices = (self.frame_info_handler.point_indices).ravel().tolist()
+    
+        self.setup_for_next_BA_iteration()
+ 
+    def setup_for_next_BA_iteration(self):
+        #set start for points that will be used for next BA iteration
+        #set start for camera params that will be BA for next BA iteration
+        self.reset_for_BA()
+        self.bundle_adjustment_time = False
+        #for recalculatoion of external pose for newly registered image using imporved points
+        self.potential_overlapping_object_pts = np.float32(self.pts_3D[self.bundle_start:]).reshape(-1,3)
         
+        self.ba_reset = True
+        self.register_new_view()
+
         
+         
 
     
     def store_for_next_registration(self):
@@ -137,7 +206,7 @@ class TwoView:
         #         common_pts_index.append(match_index[0])
         #         common_pts_index_prev.append(pt_index)
         
-        self.overlapping_pts_nri = self.inliers_right[common_pts_index]
+        self.overlapping_pts_nri = self.inliers_right
 
         # self.potential_overlapping_object_pts = self.potential_overlapping_object_pts[common_pts_index_prev]
         #to find unique pts
@@ -204,6 +273,7 @@ class TwoView:
         #well think so
         #let's test it
         # a= self.potential_overlapping_object_pts.shape
+        self.overlapping_pts_nri = self.inliers_right[self.common_pts_index_nri]
         overlapping_object_pts = self.potential_overlapping_object_pts[self.common_pts_index_prev].reshape(-1, 3)
         success, rvec, tvec, mask = cv.solvePnPRansac(overlapping_object_pts,
                                                         self.overlapping_pts_nri,
@@ -213,11 +283,13 @@ class TwoView:
         
         #Calculate Reprojection error for the overlapping points
     
+        
         print("PNP")
         pts_3D = overlapping_object_pts[mask]
         common_og_pts = self.overlapping_pts_nri[mask].reshape(-1,2)
         reproj_pts, _ = cv.projectPoints(pts_3D, rvec, tvec, self.intrinsic_camera_matrix,distCoeffs=None)
         reproj_pts = reproj_pts.reshape(-1,2) 
+        print(f"\n\nREPROJECTION ERROR FOR OVERLAPP: BA RESET: {self.ba_reset}")
         print(f"Reprojected points:\n{reproj_pts[:10,:]}")
         print(f"Original points:\n{common_og_pts[:10,:]}")
         error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
@@ -229,7 +301,7 @@ class TwoView:
         outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
         outlier_mask[mask] = False;
         outlier_pts = overlapping_object_pts[outlier_mask]
-        print(outlier_pts)
+        # print(outlier_pts)
         if len(outlier_pts) != 0: 
             self.update_known_outlier_pts(outlier_pts)
        
@@ -239,8 +311,12 @@ class TwoView:
         self.transformation_matrix[0:3, 3:4] = tvec
         
         #store camera param of frame with higher index or right frame
+        
         self.update_points2d(mask)
-        self.store_camera_param()
+        if not self.ba_reset:
+            self.store_camera_param()
+        else: 
+            self.ba_reset = False
         
         
     
@@ -301,17 +377,23 @@ class TwoView:
         n = len(self.frame_info_handler.frame2)
         self.add_camera_indices(self.frame_info_handler.frame2_no, n)
 
-             # if(self.bundle_adjustment_time):
-        #     self.do_bundle_adjustment()
+        #to be used for BA reset
+        self.n_unique_pts_prev_frame = n
         
-        #inlier within overlapp indexes
-        inlier_for_overlapp = self.common_pts_index_prev[inlier_mask_index]
-        self.add_point_indices(inlier_for_overlapp.ravel().tolist())
-        
-        self.add_frame(self.overlapping_pts_nri[inlier_mask_index].reshape(-1,2))
-        self.add_points2d(self.frame_info_handler.frame3)
-        n = len(self.frame_info_handler.frame3)
-        self.add_camera_indices(self.frame_info_handler.frame3_no, n)
+        if(self.bundle_adjustment_time):
+            self.potential_overlaping_img_pts = self.potential_overlaping_img_pts[global_inlier_mask]
+            self.common_pts_index_nri = self.common_pts_index_nri[inlier_mask_index]
+            self.common_pts_index_prev = self.common_pts_index_prev[inlier_mask_index]
+            self.do_bundle_adjustment()
+        else: 
+            #inlier within overlapp indexes
+            inlier_for_overlapp = self.common_pts_index_prev[inlier_mask_index]
+            self.add_point_indices(inlier_for_overlapp.ravel().tolist())
+            
+            self.add_frame(self.overlapping_pts_nri[inlier_mask_index].reshape(-1,2))
+            self.add_points2d(self.frame_info_handler.frame3)
+            n = len(self.frame_info_handler.frame3)
+            self.add_camera_indices(self.frame_info_handler.frame3_no, n)
         
 
     def find_extrinsics_of_camera(self) -> None:
@@ -367,7 +449,6 @@ class TwoView:
         
         #set point indices for 3D points
         self.set_point_indices()
-        
         #bundle adjustment done after going through two triangulations
         self.bundle_adjustment_time = not self.bundle_adjustment_time
         

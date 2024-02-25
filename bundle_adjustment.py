@@ -66,7 +66,7 @@ class Bundle_Adjusment:
         return A 
     
     
-    def do_BA(self, points_3d, camera_params, camera_indices, point_indices, points_2d):
+    def do_BA(self, points_3d, camera_params, camera_indices, point_indices, points_2d) -> tuple:
         n_cameras = camera_params.shape[0]
         n_points = points_3d.shape[0]
         n = 10 * n_cameras + 3 * n_points
@@ -94,7 +94,14 @@ class Bundle_Adjusment:
         plt.plot(res.fun)
         for pt in res.x[:10]:
             print(pt)
+        for pt in res.x[10:20]:
+            print(pt)
+        for pt in res.x[20:30]:
+            print(pt)
+        camera_params = res.x[:10*n_cameras]
+        points_3d = res.x[10*n_cameras:]
         plt.show()
+        return camera_params, points_3d
         
         # def reprojection_error(self):
         #     #takes newly calculated 3D pts and 2D correspondences and calculate reprojection error
