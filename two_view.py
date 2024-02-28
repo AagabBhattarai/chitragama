@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from plyfile import PlyData, PlyElement
 from frames import Frames
 from bundle_adjustment import Bundle_Adjusment
+from utilities import outlier_filtering
 class TwoView:
     def __init__(self) -> None:
         self.rgb_img1 = None
@@ -13,9 +14,11 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        intrinsic_camera_matrix = [[620.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
         # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
+        intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
@@ -54,12 +57,15 @@ class TwoView:
         self.frame_info_handler:Frames = Frames()
         self.frame_info_handler.frame1_no = 0
         self.frame_info_handler.frame2_no = 0
-        self.store_camera_param()
+        # self.store_camera_param()
+        self.store_camera_param_fix()
+
         
         self.bundle_adjuster = Bundle_Adjusment()
         self.bundle_start = 0
         self.bundle_stop = 0 #equates to no. of 3D observations
         self.bundle_adjustment_time = True
+        # self.bundle_adjustment_time = False
         self.b_camera_params_start = 0 #bundle camera start
         self.b_camera_params_stop = 3 # value 3 because only 3 cameras are used for BA
         self.n_unique_pts_prev_frame = 0
@@ -67,6 +73,9 @@ class TwoView:
         # self.ba_point2d_stop = 0
         self.bundle_size = 3
         self.ba_reset = False
+        self.n_camera_params_ba = 6
+        self.fix_calib = True
+
 
     def update_frame_no_value(self, n):
         self.frame_info_handler.frame1_no = n-2
@@ -101,7 +110,7 @@ class TwoView:
         total_2D_points = len(self.frame_info_handler.points_2D)
         self.ba_point2d_start = total_2D_points - (2*self.n_unique_pts_prev_frame)
         #camera params
-        self.update_camera_intrinsic()
+        # self.update_camera_intrinsic()
         #update 2D points and indices for Repose calculation for overlapp region
         self.update_pts2d_pindex_cindex()
         self.b_camera_params_start +=1
@@ -124,23 +133,34 @@ class TwoView:
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         
         self.frame_info_handler.points_2D = np.float32(self.frame_info_handler.points_2D).reshape(-1,2)
-        self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1,10)
+        self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1,self.n_camera_params_ba)
         self.frame_info_handler.camera_indices = np.int32(self.frame_info_handler.camera_indices).ravel()
         self.frame_info_handler.point_indices = np.int32(self.frame_info_handler.point_indices).ravel()
         
         camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ])
-        opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
-                                            self.pts_3D[self.bundle_start:self.bundle_stop, :],
-                                            self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
-                                            camera_indices,
-                                            self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
-                                            self.frame_info_handler.points_2D[self.ba_point2d_start:, :]
-                                            )
+        if self.fix_calib:
+            opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
+                                                    self.pts_3D[self.bundle_start:self.bundle_stop, :],
+                                                self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
+                                                camera_indices,
+                                                self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
+                                                self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
+                                                self.intrinsic_camera_matrix.copy()
+                                                )
+        else:
+            opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
+                                                    self.pts_3D[self.bundle_start:self.bundle_stop, :],
+                                                self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
+                                                camera_indices,
+                                                self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
+                                                self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
+                                                )
+                    
         
         self.pts_3D[self.bundle_start: self.bundle_stop] = opt_pts_3D.reshape(-1,3).copy()
         self.pts_3D = self.pts_3D.tolist()
 
-        self.frame_info_handler.camera_params[self.b_camera_params_start: self.b_camera_params_stop,]   = opt_camera_params.reshape(-1,10).copy()
+        self.frame_info_handler.camera_params[self.b_camera_params_start: self.b_camera_params_stop,]   = opt_camera_params.reshape(-1,self.n_camera_params_ba).copy()
         self.frame_info_handler.camera_params = self.frame_info_handler.camera_params.ravel().tolist()
         
         self.frame_info_handler.points_2D =  (self.frame_info_handler.points_2D).tolist()
@@ -242,7 +262,7 @@ class TwoView:
         #Lowe's test
         good = []
         for m,n in matches:
-            if m.distance < 0.7*n.distance:
+            if m.distance < 0.5*n.distance:
                 good.append(m)
         
         return good
@@ -268,6 +288,77 @@ class TwoView:
         self.unique_pts_right = self.inliers_right
         print("No. of unique pts:", len(mask)) 
     
+
+    def find_extrinsics_of_camera(self) -> None:
+        E, mask = cv.findEssentialMat(self.inliers_left,
+                                         self.inliers_right,
+                                         self.intrinsic_camera_matrix,
+                                         cv.RANSAC, prob=0.999, threshold=1.0)
+        j = [x for x in mask if x ==1]
+        print(len(j))
+        # self.unique_pts_left = self.unique_pts_left[mask.ravel() == 1].reshape(-1,2)
+        # self.unique_pts_right = self.unique_pts_right[mask.ravel() == 1 ].reshape(-1,2)
+        _, R, t, fmask =  cv.recoverPose(E,  self.inliers_left,
+                                            self.inliers_right,
+                                            self.intrinsic_camera_matrix,
+                                            mask=mask)
+        
+        self.unique_pts_left = self.unique_pts_left[fmask.ravel() == 1].reshape(-1,2)
+        self.unique_pts_right = self.unique_pts_right[fmask.ravel() == 1 ].reshape(-1,2)
+        
+        # self.transformation_matrix = np.eye(4)
+        self.transformation_matrix[0:3, 0:3] = R
+        self.transformation_matrix[0:3, 3:4] = t
+        #store camera param of frame with higher index or right frame
+        # self.store_camera_param()
+        self.store_camera_param_fix()
+
+    def to_camera_coordinate(self, K, point: list[float]) -> list[float]:
+        normalized = [  (point[0] - K[0,2]) / K[0,0] ,  (point[1] - K[1,2])/K[1,1] ];
+        return normalized
+    def find_3D_of_iniliers(self) -> list[list[float]]:
+        pts_left_camera_space = list()
+        pts_right_camera_space = list()
+        for ptl, ptr in zip(self.unique_pts_left, self.unique_pts_right):
+            pts_left_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptl))
+            pts_right_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptr))
+        pts_left_camera_space = np.float32(pts_left_camera_space).T
+        pts_right_camera_space = np.float32(pts_right_camera_space).T
+        
+        proj1 = self.proj1_alt 
+        # proj1 is 3*4 matrix that muls 4*4 matrix
+        proj2 = (self.transformation_matrix)[0:3, 0:4] 
+        # proj2 = (self.transformation_matrix)[0:3, 0:4] 
+        # proj3 = np.linalg.inv(self.transformation_matrix)
+        
+        recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
+        self.proj1_alt = proj2.copy()
+        self.camera_path.append((-proj2[:3,:3].T @ proj2[:3,3]).tolist())
+        
+        triangulated_points =  recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]
+        triangulated_points= self.statistical_outlier_filtering(triangulated_points)
+        self.stop += triangulated_points.shape[0] 
+        
+        for pts in triangulated_points :
+            self.pts_3D.append(pts)
+        for (x,y) in self.unique_pts_left[:]:
+            pixel_color = self.rgb_img1[int(y),int(x)][::-1]
+            self.pts_3D_color.append(pixel_color)
+        
+        #set point indices for 3D points
+        self.set_point_indices()
+        #bundle adjustment done after going through two triangulations
+        # self.bundle_adjustment_time = not self.bundle_adjustment_time
+        self.bundle_adjustment_time = False
+
+    def statistical_outlier_filtering(self, points3d):
+        inliers_mask = outlier_filtering(points3d)
+        points3d = points3d[inliers_mask]
+        self.unique_pts_left = self.unique_pts_left[inliers_mask]
+        self.unique_pts_right = self.unique_pts_right[inliers_mask]
+        return points3d
+        
+        
     def register_new_view(self) :
         #Wait, to use pnpRansac we don't have to provide overlapping image points and 3D scene it can figure it out itself?
         #well think so
@@ -314,7 +405,8 @@ class TwoView:
         
         self.update_points2d(mask)
         if not self.ba_reset:
-            self.store_camera_param()
+            # self.store_camera_param()
+            self.store_camera_param_fix() #while not changing internal camera parameters
         else: 
             self.ba_reset = False
         
@@ -322,7 +414,7 @@ class TwoView:
     
     def update_known_outlier_pts(self, outlier_pts):
         self.pts_3D = np.float32(self.pts_3D)
-        self.pts_3D_color = np.float32(self.pts_3D_color)
+        self.pts_3D_color = np.uint8(self.pts_3D_color)
         
         print(self.pts_3D.shape)
         print(outlier_pts.shape)
@@ -395,62 +487,6 @@ class TwoView:
             n = len(self.frame_info_handler.frame3)
             self.add_camera_indices(self.frame_info_handler.frame3_no, n)
         
-
-    def find_extrinsics_of_camera(self) -> None:
-        E, mask = cv.findEssentialMat(self.inliers_left,
-                                         self.inliers_right,
-                                         self.intrinsic_camera_matrix,
-                                         cv.RANSAC, prob=0.999, threshold=1.0)
-        j = [x for x in mask if x ==1]
-        print(len(j))
-        self.unique_pts_left = self.unique_pts_left[mask.ravel() == 1].reshape(-1,2)
-        self.unique_pts_right = self.unique_pts_right[mask.ravel() == 1 ].reshape(-1,2)
-        _, R, t, _ =  cv.recoverPose(E,  self.inliers_left,
-                                            self.inliers_right,
-                                            self.intrinsic_camera_matrix,
-                                            mask=mask)
-        
-        
-        # self.transformation_matrix = np.eye(4)
-        self.transformation_matrix[0:3, 0:3] = R
-        self.transformation_matrix[0:3, 3:4] = t
-        #store camera param of frame with higher index or right frame
-        self.store_camera_param()
-
-    def to_camera_coordinate(self, K, point: list[float]) -> list[float]:
-        normalized = [  (point[0] - K[0,2]) / K[0,0] ,  (point[1] - K[1,2])/K[1,1] ];
-        return normalized
-    def find_3D_of_iniliers(self) -> list[list[float]]:
-        pts_left_camera_space = list()
-        pts_right_camera_space = list()
-        for ptl, ptr in zip(self.unique_pts_left, self.unique_pts_right):
-            pts_left_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptl))
-            pts_right_camera_space.append(self.to_camera_coordinate(self.intrinsic_camera_matrix, ptr))
-        pts_left_camera_space = np.float32(pts_left_camera_space).T
-        pts_right_camera_space = np.float32(pts_right_camera_space).T
-        
-        proj1 = self.proj1_alt 
-        # proj1 is 3*4 matrix that muls 4*4 matrix
-        proj2 = (self.transformation_matrix)[0:3, 0:4] 
-        # proj2 = (self.transformation_matrix)[0:3, 0:4] 
-        # proj3 = np.linalg.inv(self.transformation_matrix)
-        
-        recovered_3D_points_in_homogenous = cv.triangulatePoints(proj1, proj2, pts_left_camera_space, pts_right_camera_space).T
-        self.proj1_alt = proj2.copy()
-        self.camera_path.append((-proj2[:3,:3].T @ proj2[:3,3]).tolist())
-        self.stop += recovered_3D_points_in_homogenous.shape[0] 
-        
-        
-        for pts in recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]:
-            self.pts_3D.append(pts)
-        for (x,y) in self.unique_pts_left[:]:
-            pixel_color = self.rgb_img1[int(y),int(x)][::-1]
-            self.pts_3D_color.append(pixel_color)
-        
-        #set point indices for 3D points
-        self.set_point_indices()
-        #bundle adjustment done after going through two triangulations
-        self.bundle_adjustment_time = not self.bundle_adjustment_time
         
     
     
@@ -469,8 +505,15 @@ class TwoView:
         # print(f"Reprojected points:\n{reproj_pts[:10, :]}")
         # print(f"Original points:\n{original_pts[:10, :]}")
         # print(f"\nTransformation Matrix:\n{self.transformation_matrix}")
+
         error = cv.norm(original_pts, reproj_pts, normType=cv.NORM_L2)
-        # print(f"Error: {error}")
+        show_residual = (original_pts-reproj_pts).ravel()
+        # plt.plot(show_residual)
+        # plt.show()
+        # original_pts = original_pts.ravel()
+        # reproj_pts = reproj_pts.ravel()
+        
+        print(f"Reprojection for newly triangulated points Error: {error}")
         # i = input("wait") 
         
         
@@ -488,6 +531,17 @@ class TwoView:
         self.frame_info_handler.camera_params.extend(t.tolist())  
         self.frame_info_handler.camera_params.extend(intrinsics) 
     
+    def store_camera_param_fix(self):
+        R = self.transformation_matrix[ :3, :3]
+        rvec, _ = cv.Rodrigues(R)
+        t = self.transformation_matrix[:3, 3]
+
+        # intrinsics = [self.intrinsic_camera_matrix[0][0], self.intrinsic_camera_matrix[0][2]
+        #             , self.intrinsic_camera_matrix[1][1],self.intrinsic_camera_matrix[1][2]]
+        
+        self.frame_info_handler.camera_params.extend(rvec.ravel().tolist())
+        self.frame_info_handler.camera_params.extend(t.tolist())  
+        # self.frame_info_handler.camera_params.extend(intrinsics) 
     def store_points2d(self):
         self.frame_info_handler.frame1 = self.unique_pts_left.copy()
         self.frame_info_handler.frame2 = self.unique_pts_right.copy()
@@ -530,7 +584,19 @@ class TwoView:
         self.camera_path = self.camera_path.tolist()
         # plt.show()
 
+
+    def statistical_outlier_filtering_with_whole(self):
+        self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
+        self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
+        inliers_mask = outlier_filtering(self.pts_3D)
+        self.pts_3D = self.pts_3D[inliers_mask]
+        self.pts_3D_color = self.pts_3D_color[inliers_mask]
+        self.pts_3D = self.pts_3D.tolist()
+        self.pts_3D_color = self.pts_3D_color.tolist()
+
     def write_to_ply_file(self):
+        # self.statistical_outlier_filtering_with_whole()
+        
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         x,y,z =self.pts_3D[:, 0], self.pts_3D[:,1], self.pts_3D[:, 2]
         self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
