@@ -1,6 +1,24 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
+from scipy.spatial.distance import cdist
+
+def filter_with_local_neighbour(points3d, n_neighbours=32, threshold=1):
+    #pairwise distances for all points
+    distances = cdist(points3d, points3d, 'euclidean')
+    mean_distances = []
+    num_pts = len(points3d)
+    for i  in range(num_pts):
+        nearest_indices = np.argsort(distances[i])[1:n_neighbours+1]
+        mean_distance = np.mean(distances[i][nearest_indices])
+        mean_distances.append(mean_distance)
+    
+    mean_mean_distances = np.mean(mean_distances)
+    std_dev_mean_distances = np.std(mean_distances, ddof=1)
+    threshold = mean_mean_distances + threshold * std_dev_mean_distances
+    
+    inliers_mask = np.array(mean_distances) < threshold
+    return inliers_mask
 
 def filtering_with_zscore(points3d, threshold=5):
     mean = np.mean(points3d, axis=0)
@@ -28,6 +46,8 @@ def outlier_filtering(points3d, method='i'):
         inliers_mask = filtering_with_iqr(points3d)
     elif method == 'z':
         inliers_mask = filtering_with_zscore(points3d)
+    elif method =='l':
+        inliers_mask = filter_with_local_neighbour(points3d)
     return inliers_mask
 
 def display(points3D, camera_param, transform_cam_pose = False):

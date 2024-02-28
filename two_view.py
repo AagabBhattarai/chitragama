@@ -17,10 +17,10 @@ class TwoView:
         # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
         # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
-        intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
-        self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
+        self.intrinsic_camera_matrix = np.empty((3,3))
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
         self.transformation_matrix = np.eye(4) # this contains R|t for frame being registered
@@ -595,7 +595,7 @@ class TwoView:
         self.pts_3D_color = self.pts_3D_color.tolist()
 
     def write_to_ply_file(self):
-        # self.statistical_outlier_filtering_with_whole()
+        self.statistical_outlier_filtering_with_whole()
         
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         x,y,z =self.pts_3D[:, 0], self.pts_3D[:,1], self.pts_3D[:, 2]
