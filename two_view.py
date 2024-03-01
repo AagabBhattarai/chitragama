@@ -77,7 +77,7 @@ class TwoView:
         self.n_camera_params_ba = 6
         self.fix_calib = True
         self.offset_for_adding_point_indices= 0 #because 0 3D points have been triangulated till now
-
+        self.error_sum =0
 
     def update_frame_no_value(self, n):
         self.frame_info_handler.frame1_no = n-2
@@ -192,8 +192,9 @@ class TwoView:
         #set start for camera params that will be BA for next BA iteration
         self.reset_for_BA()
         self.bundle_adjustment_time = False
+        self.error_sum = 0
         #for recalculatoion of external pose for newly registered image using imporved points
-        self.potential_overlapping_object_pts = np.float32(self.pts_3D[self.bundle_start:]).reshape(-1,3)
+        self.potential_overlapping_object_pts = np.float32(self.pts_3D[self.offset_for_adding_point_indices:]).reshape(-1,3)
         
         self.ba_reset = True
         self.register_new_view()
@@ -366,7 +367,7 @@ class TwoView:
         #set point indices for 3D points
         self.set_point_indices()
         #bundle adjustment done after going through two triangulations
-        self.bundle_adjustment_time = not self.bundle_adjustment_time
+        # self.bundle_adjustment_time = not self.bundle_adjustment_time
         # self.bundle_adjustment_time = False
 
     def statistical_outlier_filtering(self, points3d):
@@ -404,6 +405,7 @@ class TwoView:
         print(f"Original points:\n{common_og_pts[:10,:]}")
         error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
         print(f"Error: {error}")
+        
 
         #remove outliers from 2D observations as well
 
@@ -529,15 +531,17 @@ class TwoView:
         # print(f"Original points:\n{original_pts[:10, :]}")
         # print(f"\nTransformation Matrix:\n{self.transformation_matrix}")
 
-        error = cv.norm(original_pts, reproj_pts, normType=cv.NORM_L2)
-        show_residual = (original_pts-reproj_pts).ravel()
+        error = cv.norm(original_pts, reproj_pts, normType=cv.NORM_L2)/len(pts_3D)
+        # show_residual = (original_pts-reproj_pts).ravel()
         # plt.plot(show_residual)
         # plt.show()
         # original_pts = original_pts.ravel()
         # reproj_pts = reproj_pts.ravel()
         
         print(f"Reprojection for newly triangulated points Error: {error}")
-        # i = input("wait") 
+        self.error_sum += error
+        if (self.error_sum > 0.5):
+            self.bundle_adjustment_time = True
         
         
     
