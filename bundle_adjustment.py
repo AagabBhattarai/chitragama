@@ -114,7 +114,7 @@ class Bundle_Adjusment:
         m = 2 * points_2d.shape[0]
 
         #pre ba points display #camera_params shape(n, n_params)expected    
-        display(points_3d, camera_params, True)
+        # display(points_3d, camera_params, True)
 
         print("n_cameras: {}".format(n_cameras))
         print("n_points: {}".format(n_points))

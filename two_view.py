@@ -1,3 +1,4 @@
+
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,10 +15,10 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
         # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
-        # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
+        intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
@@ -75,6 +76,7 @@ class TwoView:
         self.ba_reset = False
         self.n_camera_params_ba = 6
         self.fix_calib = True
+        self.offset_for_adding_point_indices= 0 #because 0 3D points have been triangulated till now
 
 
     def update_frame_no_value(self, n):
@@ -118,6 +120,7 @@ class TwoView:
     
     def update_pts2d_pindex_cindex(self):
         # self.frame_info_handler.point_indices = self.frame_info_handler.point_indices[:self.ba_point2d_start]
+        #update for frames happen in update_point_indices     
         self.frame_info_handler.points_2D = self.frame_info_handler.points_2D[:self.ba_point2d_start]
         self.frame_info_handler.camera_indices = self.frame_info_handler.camera_indices[:self.ba_point2d_start]
         
@@ -137,7 +140,11 @@ class TwoView:
         self.frame_info_handler.camera_indices = np.int32(self.frame_info_handler.camera_indices).ravel()
         self.frame_info_handler.point_indices = np.int32(self.frame_info_handler.point_indices).ravel()
         
-        camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ])
+        assert len(self.frame_info_handler.camera_indices) == len(self.frame_info_handler.point_indices), "Point inidices and camera indices not equal"
+        assert len(self.frame_info_handler.points_2D) == len(self.frame_info_handler.point_indices), "Points 2D and camera indices not equal"
+        # camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ]) 
+        
+
         if self.fix_calib:
             #give all points for optimization
             opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
@@ -152,25 +159,26 @@ class TwoView:
         #     opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
         #                                         self.pts_3D[self.bundle_start:self.bundle_stop, :],
         #                                         self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
-        #                                         camera_indices,
+        #                                         self.frame_info_handler,
         #                                         self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
         #                                         self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
         #                                         self.intrinsic_camera_matrix.copy()
         #                                         )
         else:
+            #this never run for now
             opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
                                                     self.pts_3D[self.bundle_start:self.bundle_stop, :],
                                                 self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
-                                                camera_indices,
+                                                # camera_indices,
                                                 self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
                                                 self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
                                                 )
                     
         
-        self.pts_3D[self.bundle_start: self.bundle_stop] = opt_pts_3D.reshape(-1,3).copy()
+        self.pts_3D = opt_pts_3D.reshape(-1,3).copy()
         self.pts_3D = self.pts_3D.tolist()
 
-        self.frame_info_handler.camera_params[self.b_camera_params_start: self.b_camera_params_stop,]   = opt_camera_params.reshape(-1,self.n_camera_params_ba).copy()
+        self.frame_info_handler.camera_params  = opt_camera_params.reshape(-1,self.n_camera_params_ba).copy()
         self.frame_info_handler.camera_params = self.frame_info_handler.camera_params.ravel().tolist()
         
         self.frame_info_handler.points_2D =  (self.frame_info_handler.points_2D).tolist()
@@ -296,7 +304,6 @@ class TwoView:
 
         self.unique_pts_left = self.inliers_left
         self.unique_pts_right = self.inliers_right
-        print("No. of unique pts:", len(mask)) 
     
 
     def find_extrinsics_of_camera(self) -> None:
@@ -315,6 +322,7 @@ class TwoView:
         
         self.unique_pts_left = self.unique_pts_left[fmask.ravel() == 1].reshape(-1,2)
         self.unique_pts_right = self.unique_pts_right[fmask.ravel() == 1 ].reshape(-1,2)
+        print("No. of unique pts:", len(self.unique_pts_left)) 
         
         # self.transformation_matrix = np.eye(4)
         self.transformation_matrix[0:3, 0:3] = R
@@ -403,8 +411,8 @@ class TwoView:
         outlier_mask[mask] = False;
         outlier_pts = overlapping_object_pts[outlier_mask]
         # print(outlier_pts)
-        if len(outlier_pts) != 0: 
-            self.update_known_outlier_pts(outlier_pts)
+        # if len(outlier_pts) != 0: 
+        #     self.update_known_outlier_pts(outlier_pts)
        
         R = cv.Rodrigues(rvec)[0]
         # self.transformation_matrix = np.eye(4)
@@ -417,7 +425,10 @@ class TwoView:
         if not self.ba_reset:
             # self.store_camera_param()
             self.store_camera_param_fix() #while not changing internal camera parameters
+            # if self.frame_info_handler.frame3_no == 3:
+            #     self.do_bundle_adjustment()
         else: 
+            # self.store_camera_param_fix() #while not changing internal camera parameters
             self.ba_reset = False
         
         
@@ -460,16 +471,16 @@ class TwoView:
 
     
     def update_points2d(self, inlier_mask_index):
-        length = len(self.common_pts_index_prev)
-        outlier_mask = np.ones(length, dtype=bool)
-        outlier_mask[inlier_mask_index] = False
-        outlier_index = self.common_pts_index_prev[outlier_mask]
-        #now find total inliers using outlier_index ( inlier for overlapp -> outlier for whole -> inlier for whole)
+        # length = len(self.common_pts_index_prev)
+        # outlier_mask = np.ones(length, dtype=bool)
+        # outlier_mask[inlier_mask_index] = False
+        # outlier_index = self.common_pts_index_prev[outlier_mask]
+        # #now find total inliers using outlier_index ( inlier for overlapp -> outlier for whole -> inlier for whole)
         length_i = len(self.potential_overlaping_img_pts)
         global_inlier_mask = np.ones(length_i, dtype=bool)
-        global_inlier_mask[outlier_index] = False
-        self.frame_info_handler.frame1 = self.frame_info_handler.frame1[global_inlier_mask].reshape(-1,2)
-        self.frame_info_handler.frame2 = self.frame_info_handler.frame2[global_inlier_mask].reshape(-1,2)
+        # global_inlier_mask[outlier_index] = False
+        # self.frame_info_handler.frame1 = self.frame_info_handler.frame1[global_inlier_mask].reshape(-1,2)
+        # self.frame_info_handler.frame2 = self.frame_info_handler.frame2[global_inlier_mask].reshape(-1,2)
 
         self.add_points2d(self.frame_info_handler.frame1)
         n = len(self.frame_info_handler.frame1)
@@ -481,7 +492,6 @@ class TwoView:
 
         #to be used for BA reset
         self.n_unique_pts_prev_frame = n
-        
         if(self.bundle_adjustment_time):
             self.potential_overlaping_img_pts = self.potential_overlaping_img_pts[global_inlier_mask]
             self.common_pts_index_nri = self.common_pts_index_nri[inlier_mask_index]
@@ -490,12 +500,15 @@ class TwoView:
         else: 
             #inlier within overlapp indexes
             inlier_for_overlapp = self.common_pts_index_prev[inlier_mask_index]
-            self.add_point_indices(inlier_for_overlapp.ravel().tolist())
+            point_indices= inlier_for_overlapp.ravel() + self.offset_for_adding_point_indices
+            self.add_point_indices(point_indices)
+            self.offset_for_adding_point_indices += n #so from now on  for next add point indices, N + [2, 3, 7,...] will happen
             
             self.add_frame(self.overlapping_pts_nri[inlier_mask_index].reshape(-1,2))
             self.add_points2d(self.frame_info_handler.frame3)
             n = len(self.frame_info_handler.frame3)
             self.add_camera_indices(self.frame_info_handler.frame3_no, n)
+            
         
         
     
@@ -563,7 +576,7 @@ class TwoView:
         
     def set_point_indices(self):
         assert self.start != self.stop, "Stride variables are equal, they should be different"
-        point_indices = [(x-self.bundle_start) for x in range(self.start, self.stop)]
+        point_indices = [(x) for x in range(self.start, self.stop)]
         self.frame_info_handler.point_indices.extend(point_indices)
         self.frame_info_handler.point_indices.extend(point_indices)
     
