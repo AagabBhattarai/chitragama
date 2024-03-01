@@ -14,13 +14,13 @@ class TwoView:
         self.sift = cv.SIFT_create()
         self.bf_matcher = cv.BFMatcher()
         #change how you take matrix K, read it from a file or something
-        # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+        intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
         # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
-        self.intrinsic_camera_matrix = np.empty((3,3))
+        self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
         self.proj1 =self.intrinsic_camera_matrix @ temp[:3,:4]
         self.transformation_matrix = np.eye(4) # this contains R|t for frame being registered
@@ -139,14 +139,24 @@ class TwoView:
         
         camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ])
         if self.fix_calib:
+            #give all points for optimization
             opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
-                                                    self.pts_3D[self.bundle_start:self.bundle_stop, :],
-                                                self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
-                                                camera_indices,
-                                                self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
-                                                self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
+                                                self.pts_3D,
+                                                self.frame_info_handler.camera_params,
+                                                self.frame_info_handler.camera_indices,
+                                                self.frame_info_handler.point_indices,
+                                                self.frame_info_handler.points_2D,
                                                 self.intrinsic_camera_matrix.copy()
                                                 )
+        # if self.fix_calib:
+        #     opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
+        #                                         self.pts_3D[self.bundle_start:self.bundle_stop, :],
+        #                                         self.frame_info_handler.camera_params[self.b_camera_params_start:self.b_camera_params_stop, :],
+        #                                         camera_indices,
+        #                                         self.frame_info_handler.point_indices[self.ba_point2d_start:, ],
+        #                                         self.frame_info_handler.points_2D[self.ba_point2d_start:, :],
+        #                                         self.intrinsic_camera_matrix.copy()
+        #                                         )
         else:
             opt_camera_params, opt_pts_3D = self.bundle_adjuster.do_BA(
                                                     self.pts_3D[self.bundle_start:self.bundle_stop, :],
@@ -348,8 +358,8 @@ class TwoView:
         #set point indices for 3D points
         self.set_point_indices()
         #bundle adjustment done after going through two triangulations
-        # self.bundle_adjustment_time = not self.bundle_adjustment_time
-        self.bundle_adjustment_time = False
+        self.bundle_adjustment_time = not self.bundle_adjustment_time
+        # self.bundle_adjustment_time = False
 
     def statistical_outlier_filtering(self, points3d):
         inliers_mask = outlier_filtering(points3d)
@@ -376,6 +386,7 @@ class TwoView:
     
         
         print("PNP")
+        print("\nSCENE OVERLAPPING POINTS: ",mask.shape[0],"\n")
         pts_3D = overlapping_object_pts[mask]
         common_og_pts = self.overlapping_pts_nri[mask].reshape(-1,2)
         reproj_pts, _ = cv.projectPoints(pts_3D, rvec, tvec, self.intrinsic_camera_matrix,distCoeffs=None)
@@ -388,7 +399,6 @@ class TwoView:
 
         #remove outliers from 2D observations as well
 
-        print(mask.shape[0])
         outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
         outlier_mask[mask] = False;
         outlier_pts = overlapping_object_pts[outlier_mask]
