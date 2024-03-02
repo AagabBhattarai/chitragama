@@ -11,6 +11,10 @@ class Frames:
         self.frame1 = None
         self.frame2 = None
         self.frame3 = None
+
+        self.frame1_indices = None
+        self.frame2_indices = None
+        self.frame3_indices = None
         
         #refactoring required
         self.frame1_no=None

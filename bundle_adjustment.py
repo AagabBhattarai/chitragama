@@ -126,8 +126,8 @@ class Bundle_Adjusment:
         x0 = np.hstack((camera_params.ravel(), points_3d.ravel()))
         f0 = self.fun(x0, n_cameras, n_points, camera_indices, point_indices, points_2d,n_camera_params, internal_calib)
         print("\nRes Error:\n",(sum(f0**2)**0.5)/m)
-        plt.plot(f0)
-        plt.show()
+        # plt.plot(f0)
+        # plt.show()
         
         A = self.bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices, n_camera_params)
         res = least_squares(self.fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', ftol=1e-4, method='trf',
@@ -135,14 +135,14 @@ class Bundle_Adjusment:
         
 
         print("\nOptimized Res Error:\n",(sum(res.fun**2)**0.5)/m)
-        plt.plot(res.fun)
+        # plt.plot(res.fun)
         camera_params = res.x[:n_camera_params*n_cameras]
         points_3d = res.x[n_camera_params*n_cameras:]
-        plt.show()
+        # plt.show()
 
         print("Least square minimization performed")
         #show what improvement has been done on a plot
-        display(points_3d.reshape(-1, 3), camera_params.reshape(-1, n_camera_params), True)
+        # display(points_3d.reshape(-1, 3), camera_params.reshape(-1, n_camera_params), True)
         return camera_params, points_3d
         
 

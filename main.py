@@ -14,7 +14,7 @@ def main():
     print(filepaths)
     
     # filepaths = filepaths[16:]
-    filepaths = filepaths[:20]
+    # filepaths = filepaths[:20]
     
     #Use 2 views to create a object points
     intial_model = filepaths[:2]
@@ -42,7 +42,7 @@ def main():
         sfm.find_overlap()
         sfm.register_new_view()
         sfm.find_3D_of_iniliers()
-        # sfm.reprojection_error()
+        sfm.reprojection_error()
         # sfm.display()
         sfm.store_for_next_registration()
         sfm.update_bundle_stop()

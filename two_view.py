@@ -17,8 +17,8 @@ class TwoView:
         #change how you take matrix K, read it from a file or something
         # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
-        # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
-        intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
+        intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
@@ -367,7 +367,7 @@ class TwoView:
         #set point indices for 3D points
         self.set_point_indices()
         #bundle adjustment done after going through two triangulations
-        # self.bundle_adjustment_time = not self.bundle_adjustment_time
+        self.bundle_adjustment_time = not self.bundle_adjustment_time
         # self.bundle_adjustment_time = False
 
     def statistical_outlier_filtering(self, points3d):
@@ -409,9 +409,9 @@ class TwoView:
 
         #remove outliers from 2D observations as well
 
-        outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
-        outlier_mask[mask] = False;
-        outlier_pts = overlapping_object_pts[outlier_mask]
+        # outlier_mask = np.ones(overlapping_object_pts.shape[0], dtype=bool)
+        # outlier_mask[mask] = False;
+        # outlier_pts = overlapping_object_pts[outlier_mask]
         # print(outlier_pts)
         # if len(outlier_pts) != 0: 
         #     self.update_known_outlier_pts(outlier_pts)
@@ -456,7 +456,7 @@ class TwoView:
         # print((outlier_pts))
         
         #use remove the outlier indices from point_indices 
-        self.update_point_indices(global_outlier_indices)
+        # self.update_point_indices(global_outlier_indices)
         # global_inlier_indices = [x for x in range(length) if x not in global_outlier_indices]
         # unique_outlier_indices = set(global_outlier_indices.tolist())
         assert self.start==self.stop, "Stride variables unmatched"
@@ -487,10 +487,12 @@ class TwoView:
         self.add_points2d(self.frame_info_handler.frame1)
         n = len(self.frame_info_handler.frame1)
         self.add_camera_indices(self.frame_info_handler.frame1_no,n)
+        # self.add_point_indices(self.frame_info_handler.frame1_indices)
         
         self.add_points2d(self.frame_info_handler.frame2)
         n = len(self.frame_info_handler.frame2)
         self.add_camera_indices(self.frame_info_handler.frame2_no, n)
+        # self.add_point_indices(self.frame_info_handler.frame2_indices)
 
         #to be used for BA reset
         self.n_unique_pts_prev_frame = n
@@ -581,6 +583,8 @@ class TwoView:
     def set_point_indices(self):
         assert self.start != self.stop, "Stride variables are equal, they should be different"
         point_indices = [(x) for x in range(self.start, self.stop)]
+        self.frame_info_handler.frame1_indices = point_indices
+        self.frame_info_handler.frame2_indices = point_indices
         self.frame_info_handler.point_indices.extend(point_indices)
         self.frame_info_handler.point_indices.extend(point_indices)
     
@@ -615,7 +619,7 @@ class TwoView:
     def statistical_outlier_filtering_with_whole(self):
         self.pts_3D_color = np.uint8(self.pts_3D_color).reshape(-1,3)
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
-        inliers_mask = outlier_filtering(self.pts_3D)
+        inliers_mask = outlier_filtering(self.pts_3D, 'i')
         self.pts_3D = self.pts_3D[inliers_mask]
         self.pts_3D_color = self.pts_3D_color[inliers_mask]
         self.pts_3D = self.pts_3D.tolist()

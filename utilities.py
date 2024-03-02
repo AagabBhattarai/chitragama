@@ -3,7 +3,7 @@ import numpy as np
 import cv2 as cv
 from scipy.spatial.distance import cdist
 
-def filter_with_local_neighbour(points3d, n_neighbours=32, threshold=1):
+def filter_with_local_neighbour(points3d, n_neighbours=9, threshold=1):
     #pairwise distances for all points
     distances = cdist(points3d, points3d, 'euclidean')
     mean_distances = []
@@ -41,7 +41,7 @@ def filtering_with_iqr(points3d, k=1.5):
     
     return inliers_mask 
 
-def outlier_filtering(points3d, method='i'):
+def outlier_filtering(points3d, method='l'):
     if method == 'i':
         inliers_mask = filtering_with_iqr(points3d)
     elif method == 'z':
