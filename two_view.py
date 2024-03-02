@@ -1,4 +1,3 @@
-
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,8 +16,8 @@ class TwoView:
         #change how you take matrix K, read it from a file or something
         # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
-        intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
-        # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
+        intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
@@ -78,6 +77,7 @@ class TwoView:
         self.fix_calib = True
         self.offset_for_adding_point_indices= 0 #because 0 3D points have been triangulated till now
         self.error_sum =0
+        self.camera_path_added_till_first_ba =0
 
     def update_frame_no_value(self, n):
         self.frame_info_handler.frame1_no = n-2
@@ -140,6 +140,8 @@ class TwoView:
         self.frame_info_handler.camera_indices = np.int32(self.frame_info_handler.camera_indices).ravel()
         self.frame_info_handler.point_indices = np.int32(self.frame_info_handler.point_indices).ravel()
         
+        if self.camera_path_added_till_first_ba == 0:
+            self.camera_path_added_till_first_ba = len(self.frame_info_handler.camera_params)
         assert len(self.frame_info_handler.camera_indices) == len(self.frame_info_handler.point_indices), "Point inidices and camera indices not equal"
         assert len(self.frame_info_handler.points_2D) == len(self.frame_info_handler.point_indices), "Points 2D and camera indices not equal"
         # camera_indices = self.alter_camera_indices_pre_ba(self.frame_info_handler.camera_indices[self.ba_point2d_start:, ]) 
@@ -371,7 +373,12 @@ class TwoView:
         # self.bundle_adjustment_time = False
 
     def statistical_outlier_filtering(self, points3d):
-        inliers_mask = outlier_filtering(points3d)
+        inliers_mask = outlier_filtering(points3d, method='l')
+        points3d = points3d[inliers_mask]
+        self.unique_pts_left = self.unique_pts_left[inliers_mask]
+        self.unique_pts_right = self.unique_pts_right[inliers_mask]
+        
+        inliers_mask = outlier_filtering(points3d, method='i')
         points3d = points3d[inliers_mask]
         self.unique_pts_left = self.unique_pts_left[inliers_mask]
         self.unique_pts_right = self.unique_pts_right[inliers_mask]
@@ -542,7 +549,7 @@ class TwoView:
         
         print(f"Reprojection for newly triangulated points Error: {error}")
         self.error_sum += error
-        if (self.error_sum > 0.5):
+        if (self.error_sum > 0.1):
             self.bundle_adjustment_time = True
         
         
@@ -638,6 +645,7 @@ class TwoView:
         el = PlyElement.describe(vertex, 'vertex')
         PlyData([el]).write("point_cloud.ply")
         self.camera_path = np.float32(self.camera_path).reshape(-1,3)
+        
         x,y,z =self.camera_path[:, 0], self.camera_path[:,1], self.camera_path[:, 2]
         pts = list(zip(x,y,z))
         vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
@@ -647,4 +655,13 @@ class TwoView:
     def get_pts_3D(self) -> np.ndarray:
         return self.pts_3D
     
+    
+    def update_camera_path(self):
+        self.frame_info_handler.camera_params = np.float32(self.frame_info_handler.camera_params).reshape(-1, self.n_camera_params_ba)
+        for i in range(self.camera_path_added_till_first_ba):
+            rvec = self.frame_info_handler.camera_params[i, :3]
+            tvec = self.frame_info_handler.camera_params[i, 3:6]
+            rmat, _ = cv.Rodrigues(rvec)
+            cam_path = (-rmat.T @ tvec).tolist()
+            self.camera_path[i] = cam_path
         

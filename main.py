@@ -3,8 +3,8 @@ import glob
 
 def main():
     # test_directory = "fountain"
-    test_directory = "GustavIIAdolf"
-    # test_directory = "guerre"
+    # test_directory = "GustavIIAdolf"
+    test_directory = "guerre"
     # test_directory = "eglise"
     # test_directory = "nikolaiI"
     # filepaths = glob.glob(f"{test_directory}/*.png")
@@ -50,6 +50,8 @@ def main():
     sfm.start = 0
     sfm.display()
 
+
+    sfm.update_camera_path()
     sfm.write_to_ply_file()
     pts = sfm.get_pts_3D()
     print(pts)
