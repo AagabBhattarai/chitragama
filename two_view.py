@@ -1,4 +1,4 @@
-
+import glob
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,6 +6,7 @@ from plyfile import PlyData, PlyElement
 from frames import Frames
 from bundle_adjustment import Bundle_Adjusment
 from utilities import outlier_filtering
+from intrinsic_matrix import compute_intrinsic_matrix
 class TwoView:
     def __init__(self) -> None:
         self.rgb_img1 = None
@@ -17,9 +18,14 @@ class TwoView:
         #change how you take matrix K, read it from a file or something
         # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
         #K for GUSTAV
-        intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2393.952166119461, -3.410605131648481e-13, 932.3821770809047], [0, 2398.118540286656, 628.2649953288065], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
-        # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]
+        # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]     
+        self.test_directory = "GustavIIAdolf"
+        self.filepaths = glob.glob(f"{self.test_directory}/*.jpg")
+        self.database_path = "sensor_width_camera_database.txt"
+        # image_path = "./GustavIIAdolf/DSC_0351.JPG"
+        intrinsic_camera_matrix = compute_intrinsic_matrix(self.filepaths[0], self.database_path)
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
@@ -79,6 +85,9 @@ class TwoView:
         self.offset_for_adding_point_indices= 0 #because 0 3D points have been triangulated till now
         self.error_sum =0
 
+    def get_filepaths(self):
+        return self.filepaths
+    
     def update_frame_no_value(self, n):
         self.frame_info_handler.frame1_no = n-2
         self.frame_info_handler.frame2_no = n-1

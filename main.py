@@ -2,25 +2,28 @@ from two_view import TwoView
 import glob
 
 def main():
-    # test_directory = "fountain"
-    test_directory = "GustavIIAdolf"
-    # test_directory = "guerre"
-    # test_directory = "eglise"
-    # test_directory = "nikolaiI"
-    # filepaths = glob.glob(f"{test_directory}/*.png")
-    filepaths = glob.glob(f"{test_directory}/*.jpg")
+    # # test_directory = "fountain"
+    # test_directory = "GustavIIAdolf"
+    # # test_directory = "guerre"
+    # # test_directory = "eglise"
+    # # test_directory = "nikolaiI"
+    # # filepaths = glob.glob(f"{test_directory}/*.png")
+    # filepaths = glob.glob(f"{test_directory}/*.jpg")
     
-    # filepaths = ['fountain\\0005.png', 'fountain\\0004.png', 'fountain\\0006.png', 'fountain\\0007.png', 'fountain\\0003.png', 'fountain\\0002.png', 'fountain\\0001.png', 'fountain\\0000.png']#, 'fountain\\0008.png', 'fountain\\0009.png', 'fountain\\0010.png']
-    print(filepaths)
+    # # filepaths = ['fountain\\0005.png', 'fountain\\0004.png', 'fountain\\0006.png', 'fountain\\0007.png', 'fountain\\0003.png', 'fountain\\0002.png', 'fountain\\0001.png', 'fountain\\0000.png']#, 'fountain\\0008.png', 'fountain\\0009.png', 'fountain\\0010.png']
+    # print(filepaths)
     
     # filepaths = filepaths[16:]
     # filepaths = filepaths[:20]
-    
+    sfm = TwoView()
+    filepaths = sfm.get_filepaths()
+    print(filepaths)
+
     #Use 2 views to create a object points
     intial_model = filepaths[:2]
     filepaths.remove(intial_model[0])
     # filepaths.remove(intial_model[1])
-    sfm = TwoView()
+    
     sfm.process_image(intial_model)
     matches = sfm.find_good_correspondences()
     sfm.find_inlier_points(matches)
