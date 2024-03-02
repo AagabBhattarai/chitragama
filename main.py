@@ -53,6 +53,8 @@ def main():
     sfm.start = 0
     sfm.display()
 
+
+    sfm.update_camera_path()
     sfm.write_to_ply_file()
     pts = sfm.get_pts_3D()
     print(pts)
