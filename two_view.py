@@ -22,10 +22,15 @@ class TwoView:
         # intrinsic_camera_matrix = [[2461.016, 0, 1936/2], [0, 2460, 1296/2], [0, 0, 1]]
         # intrinsic_camera_matrix = [[2393.95216, 0, 932.3821], [0, 2393.9521, 628.2649], [0, 0, 1]]     
         self.test_directory = "GustavIIAdolf"
+        # self.test_directory = "nikolaiI"
+        # self.test_directory = "guerre"
+        # self.test_directory = "eglise"
         self.filepaths = glob.glob(f"{self.test_directory}/*.jpg")
         self.database_path = "sensor_width_camera_database.txt"
-        # image_path = "./GustavIIAdolf/DSC_0351.JPG"
         intrinsic_camera_matrix = compute_intrinsic_matrix(self.filepaths[0], self.database_path)
+        # self.test_directory = "chair"
+        # self.filepaths = glob.glob(f"{self.test_directory}/*.jpg")
+        # intrinsic_camera_matrix = [[3123.392, 0, 4080/2],[0, 3123.118, 3060/2],[0, 0, 1]]
         self.distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
         self.intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
         temp = np.eye(4)
@@ -379,7 +384,7 @@ class TwoView:
         #set point indices for 3D points
         self.set_point_indices()
         #bundle adjustment done after going through two triangulations
-        self.bundle_adjustment_time = not self.bundle_adjustment_time
+        # self.bundle_adjustment_time = not self.bundle_adjustment_time
         # self.bundle_adjustment_time = False
 
     def statistical_outlier_filtering(self, points3d):
@@ -388,10 +393,10 @@ class TwoView:
         self.unique_pts_left = self.unique_pts_left[inliers_mask]
         self.unique_pts_right = self.unique_pts_right[inliers_mask]
         
-        inliers_mask = outlier_filtering(points3d, method='i')
-        points3d = points3d[inliers_mask]
-        self.unique_pts_left = self.unique_pts_left[inliers_mask]
-        self.unique_pts_right = self.unique_pts_right[inliers_mask]
+        # inliers_mask = outlier_filtering(points3d, method='i')
+        # points3d = points3d[inliers_mask]
+        # self.unique_pts_left = self.unique_pts_left[inliers_mask]
+        # self.unique_pts_right = self.unique_pts_right[inliers_mask]
         return points3d
         
         
@@ -559,7 +564,8 @@ class TwoView:
         
         print(f"Reprojection for newly triangulated points Error: {error}")
         self.error_sum += error
-        if (self.error_sum > 0.1):
+        print(f"ERROR SUM: {self.error_sum}")
+        if (self.error_sum > 0.5):
             self.bundle_adjustment_time = True
         
         
@@ -642,8 +648,10 @@ class TwoView:
         self.pts_3D = self.pts_3D.tolist()
         self.pts_3D_color = self.pts_3D_color.tolist()
 
-    def write_to_ply_file(self):
-        self.statistical_outlier_filtering_with_whole()
+    def write_to_ply_file(self, name):
+        pcd_name = name + "point_cloud.ply"
+        cam_name = name + "camera_path.ply"
+        # self.statistical_outlier_filtering_with_whole()
         
         self.pts_3D = np.float32(self.pts_3D).reshape(-1,3)
         x,y,z =self.pts_3D[:, 0], self.pts_3D[:,1], self.pts_3D[:, 2]
@@ -653,14 +661,14 @@ class TwoView:
         vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
 
         el = PlyElement.describe(vertex, 'vertex')
-        PlyData([el]).write("point_cloud.ply")
+        PlyData([el]).write(pcd_name)
         self.camera_path = np.float32(self.camera_path).reshape(-1,3)
         
         x,y,z =self.camera_path[:, 0], self.camera_path[:,1], self.camera_path[:, 2]
         pts = list(zip(x,y,z))
         vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
         el = PlyElement.describe(vertex, 'vertex')
-        PlyData([el]).write("camera_path.ply")
+        PlyData([el]).write(cam_name)
     
     def get_pts_3D(self) -> np.ndarray:
         return self.pts_3D

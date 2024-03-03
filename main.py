@@ -1,4 +1,5 @@
 from two_view import TwoView
+import sys
 import glob
 
 def main():
@@ -15,6 +16,12 @@ def main():
     
     # filepaths = filepaths[16:]
     # filepaths = filepaths[:20]
+    arguments = sys.argv[1:]
+    if len(arguments) == 0:
+        arg = 'def'
+    else: 
+        arg = arguments[0]
+    
     sfm = TwoView()
     filepaths = sfm.get_filepaths()
     print(filepaths)
@@ -30,7 +37,7 @@ def main():
     sfm.find_extrinsics_of_camera()
     sfm.find_3D_of_iniliers()
     sfm.reprojection_error()
-    # sfm.display()
+    sfm.display()
     sfm.store_for_next_registration()
     
     for i, (im1, im2) in enumerate(zip(filepaths, filepaths[1:])):
@@ -55,7 +62,7 @@ def main():
 
 
     sfm.update_camera_path()
-    sfm.write_to_ply_file()
+    sfm.write_to_ply_file(arg)
     pts = sfm.get_pts_3D()
     print(pts)
 

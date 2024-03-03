@@ -130,7 +130,7 @@ class Bundle_Adjusment:
         # plt.show()
         
         A = self.bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices, n_camera_params)
-        res = least_squares(self.fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', ftol=1e-4, method='trf',
+        res = least_squares(self.fun, x0, jac_sparsity=A, verbose=2, x_scale='jac',ftol=1e-4, method='trf',loss='huber',
                     args=(n_cameras, n_points, camera_indices, point_indices, points_2d, n_camera_params, internal_calib))
         
 
