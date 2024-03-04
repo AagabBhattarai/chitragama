@@ -71,3 +71,14 @@ def display(points3D, camera_param, transform_cam_pose = False):
         ax.set_ylabel('y', labelpad=20)
         ax.set_zlabel('z', labelpad=20)
         plt.show()
+
+def display_3d(points3D):
+    ax = plt.axes(projection='3d')
+    ax.scatter(points3D[:, 0], points3D[:,1], points3D[:, 2],s= 10) 
+    # ax.scatter(camera_path[:,0],camera_path[:,1],camera_path[:,2])
+
+    ax.set_title('3D Parametric Plot')
+    ax.set_xlabel('x', labelpad=20)
+    ax.set_ylabel('y', labelpad=20)
+    ax.set_zlabel('z', labelpad=20)
+    plt.show()

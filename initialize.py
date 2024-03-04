@@ -12,9 +12,9 @@ def debug_info(Views):
         print(len(view.descriptors))
 
 def set_img_values(Views:list, filepath, K: np.ndarray, distc: np.ndarray ):
-    for path in tqdm(filepath, desc="Loading images"):  # Wrap filepath with tqdm
+    for i,path in tqdm(enumerate(filepath), desc="Loading images"):  # Wrap filepath with tqdm
         view = ImageView()
-        
+        view.id = i
         view.gray_img = cv.imread(path, cv.IMREAD_GRAYSCALE)
         assert view.gray_img is not None, f"AssertionError: gray_img is None at line {inspect.currentframe().f_lineno}"
         
@@ -31,6 +31,7 @@ def find_feature_points(Views: list, metainfo:MetaInfo):
     for  view in tqdm((Views), total=len(Views), desc="Computing SIFT feature points"): 
         view.keypoints, view.descriptors = sift.detectAndCompute(view.gray_img,None)
         metainfo.total_feature_points += len(view.keypoints)
+        view.set_initial_id()
 
  
 def initialization(Views: list, metainfo: MetaInfo):
@@ -39,6 +40,7 @@ def initialization(Views: list, metainfo: MetaInfo):
     # directory = "guerre"
     # directory = "eglise"
     filepaths = glob.glob(f"{directory}/*.jpg")
+    filepaths = filepaths[:10]
     database_path = "sensor_width_camera_database.txt"
     intrinsic_camera_matrix = compute_intrinsic_matrix(filepaths[0], database_path)
     distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
