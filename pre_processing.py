@@ -7,18 +7,21 @@ from initialize import initialization
 import inspect
 from tqdm import tqdm 
 
-def debug_info(Frames):
-    for view in Frames:
+def debug_info(Views):
+    for view in Views:
         print(len(view.keypoints))
         print(len(view.descriptors))
 
 def main_flow():
-    Frames = []
+    Views = []
     metainfo = MetaInfo()
 
     #Open Images and compute SIFT features 
-    initialization(Frames, metainfo)
+    initialization(Views, metainfo)
     print('Total Keypoints:', metainfo.total_feature_points) 
     
+    #Track 2D features for across all views
+    
+     
     
 main_flow()

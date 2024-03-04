@@ -6,12 +6,12 @@ from info_track import ImageView, MetaInfo
 import inspect
 from tqdm import tqdm 
 
-def debug_info(Frames):
-    for view in Frames:
+def debug_info(Views):
+    for view in Views:
         print(len(view.keypoints))
         print(len(view.descriptors))
 
-def set_img_values(Frames:list, filepath, K: np.ndarray, distc: np.ndarray ):
+def set_img_values(Views:list, filepath, K: np.ndarray, distc: np.ndarray ):
     for path in tqdm(filepath, desc="Loading images"):  # Wrap filepath with tqdm
         view = ImageView()
         
@@ -24,16 +24,16 @@ def set_img_values(Frames:list, filepath, K: np.ndarray, distc: np.ndarray ):
         view.K = K.copy()
         view.distortion_coefficient = distc.copy() 
 
-        Frames.append(view)
+        Views.append(view)
 
-def find_feature_points(Frames: list, metainfo:MetaInfo):
+def find_feature_points(Views: list, metainfo:MetaInfo):
     sift = cv.SIFT_create()
-    for  view in tqdm((Frames), total=len(Frames), desc="Computing SIFT feature points"): 
+    for  view in tqdm((Views), total=len(Views), desc="Computing SIFT feature points"): 
         view.keypoints, view.descriptors = sift.detectAndCompute(view.gray_img,None)
         metainfo.total_feature_points += len(view.keypoints)
 
  
-def initialization(Frames: list, metainfo: MetaInfo):
+def initialization(Views: list, metainfo: MetaInfo):
     directory = "GustavIIAdolf"
     # directory = "nikolaiI"
     # directory = "guerre"
@@ -45,9 +45,10 @@ def initialization(Frames: list, metainfo: MetaInfo):
     intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
     
     #open images
-    set_img_values(Frames, filepaths, intrinsic_camera_matrix, distortion_coefficients)
-    assert len(Frames) == len(filepaths), f"AssertionError: Frames not initialized properly Line:{inspect.currentframe().f_lineno}"
+    set_img_values(Views, filepaths, intrinsic_camera_matrix, distortion_coefficients)
+    assert len(Views) == len(filepaths), f"AssertionError: Views not initialized properly Line:{inspect.currentframe().f_lineno}"
     #Compute SIFT features
-    find_feature_points(Frames, metainfo)
+    find_feature_points(Views, metainfo)
+    metainfo.total_frames = len(Views)
 
 

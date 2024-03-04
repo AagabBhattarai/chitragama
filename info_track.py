@@ -17,4 +17,5 @@ class MetaInfo:
     def __init__(self) -> None:
         self.total_feature_points = 0
         self.unique_feature_points = 0
+        self.total_frames = 0
         
