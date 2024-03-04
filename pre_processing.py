@@ -21,7 +21,9 @@ def main_flow():
     print('Total Keypoints:', metainfo.total_feature_points) 
     
     #Track 2D features for across all views
+    feature_track = np.zeros((metainfo.total_views, metainfo.total_feature_points), dtype=bool)
+    assert len(Views) == len(feature_track), "Assertion Error: metainfo.total_views not computed properly"
     
-     
+
     
 main_flow()

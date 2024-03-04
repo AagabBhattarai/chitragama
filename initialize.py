@@ -49,6 +49,6 @@ def initialization(Views: list, metainfo: MetaInfo):
     assert len(Views) == len(filepaths), f"AssertionError: Views not initialized properly Line:{inspect.currentframe().f_lineno}"
     #Compute SIFT features
     find_feature_points(Views, metainfo)
-    metainfo.total_frames = len(Views)
+    metainfo.total_views = len(Views)
 
 
