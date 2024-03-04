@@ -82,3 +82,18 @@ def display_3d(points3D):
     ax.set_ylabel('y', labelpad=20)
     ax.set_zlabel('z', labelpad=20)
     plt.show()
+
+def display_plot_simple(points):
+    num_bins = len(points)
+
+    # Create histogram with custom bins
+    plt.hist(points, bins=num_bins, range=(points.min(), points.max()), color='skyblue', edgecolor='black')
+
+    # Set labels and title
+    plt.xlabel('Values')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of points')
+
+    # Show plot
+    plt.grid(True)
+    plt.show()

@@ -4,7 +4,7 @@ import numpy as np
 from intrinsic_matrix import compute_intrinsic_matrix
 from info_track import ImageView, MetaInfo, ImagePair
 from initialize import initialization
-from utilities import display_3d
+from utilities import display_3d, display_plot_simple
 import inspect
 from tqdm import tqdm 
 
@@ -76,6 +76,8 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
     association = list()
     for i, comp_view in enumerate(Views):
         if query_view.id == comp_view.id:
+            if(len(association)>0):
+                Scene_graph.append(association)
             return
         
         matches = find_match(query_view, comp_view, bf_matcher)
@@ -84,13 +86,14 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
             avg_depth = find_average_depth(query_view, comp_view, proj2, i_matches)
             imgpair = ImagePair(query_view.id, comp_view.id, proj2, i_matches, avg_depth)
             for m in i_matches:
+                # if query_view.global_descriptor[m.queryIdx] ==-1
                 query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
                 query_view.global_descriptor_status[m.queryIdx] = True
+            association.append(imgpair)
         else:
             imgpair = ImagePair(query_view.id, comp_view.id, np.ones((3,4)), [], 1)
-        association.append(imgpair)
-
-    Scene_graph.append(association)
+            association.append(imgpair)
+    
             
 def main_flow():
     Views = []
@@ -117,7 +120,29 @@ def main_flow():
         print("\nunique pts identified:", global_descriptor_index_value)
     
     print("Number of unique features:", global_descriptor_index_value)
+    metainfo.unique_feature_points =global_descriptor_index_value 
+    print('Total Keypoints:', metainfo.total_feature_points)
+    
+    #find two views to initialize object scene
+    feature_track = feature_track[:, :global_descriptor_index_value]
+    initaization_ids = find_initialization_view_id(feature_track, Scene_graph)
+    return Views, Scene_graph, initaization_ids, metainfo, feature_track
     
 
-    
-main_flow()
+def find_initialization_view_id(feature_track,Scene_graph, maximum_depth_for_acceptable_baseline=10): #random value choosen
+    feature_repeat_frequency = np.sum(feature_track, axis=0)
+    # display_plot_simple(feature_repeat_frequency)#plot display doesn't work
+    view1 =1
+    view2 =0
+    maximum_track_sum =0
+    for association in Scene_graph:
+        for img_pair in association:
+            if img_pair.average_depth != 1 and img_pair.average_depth< maximum_depth_for_acceptable_baseline:
+                common_points = np.logical_and(feature_track[img_pair.view_1], feature_track[img_pair.view_2]) 
+                track_sum = np.sum(feature_repeat_frequency[common_points])
+                if track_sum >maximum_track_sum:
+                    maximum_track_sum = track_sum
+                    view1, view2 = img_pair.view_1, img_pair.view_2
+    print("Maximum track sum:", maximum_track_sum) 
+    print("View Initialization:", view1, "\tand\t", view2)
+    return view1, view2
