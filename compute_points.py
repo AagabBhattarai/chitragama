@@ -29,8 +29,14 @@ def triangulate_new_points(Views, Scene_graph, initialization_ids, object_points
     compute_3D_points(view_1, view_2, matches, Views, object_points)
     
 def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints):
-    points_1 =np.float32([ Views[view_1].keypoints[m.queryIdx].pt for m in matches]).reshape(-1,2)
-    points_2 =np.float32([ Views[view_2].keypoints[m.trainIdx].pt for m in matches]).reshape(-1,2)
+    unique_matches = list()
+    for m in matches:
+        if Views[view_1].global_descriptor[m.queryIdx] not in object_points.pts_3D_global_descriptor_value:
+            unique_matches.append(m)
+    if len(unique_matches) == 0:
+        return object_points  
+    points_1 =np.float32([ Views[view_1].keypoints[m.queryIdx].pt for m in unique_matches]).reshape(-1,2)
+    points_2 =np.float32([ Views[view_2].keypoints[m.trainIdx].pt for m in unique_matches]).reshape(-1,2)
     camera_intrinsics1 = Views[view_1].K
     camera_intrinsics2 = Views[view_2].K
     p1 = camera_intrinsics1 @ Views[view_1].extrinsic_pose
@@ -40,13 +46,16 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
     recovered_3D_points_in_homogenous = cv.triangulatePoints(p1, p2, points_1.T, points_2.T).T
     triangulated_points =  recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]
     
-    global_descriptors_for_triangulated_pts = [Views[view_1].global_descriptor[m.queryIdx] for m in matches]
+    global_descriptors_for_triangulated_pts = [Views[view_1].global_descriptor[m.queryIdx] for m in unique_matches]
     stop = start + len(global_descriptors_for_triangulated_pts)
     stat_return= statistical_outlier_filtering(triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts)
     triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts = stat_return
-    
+    assert start != stop, "Assertion error" 
+    if len(global_descriptors_for_triangulated_pts) == 0:
+        return object_points
     object_points.pts_3D_global_descriptor[global_descriptors_for_triangulated_pts] = True
     object_points.pts_3D_global_descriptor_value.extend(global_descriptors_for_triangulated_pts)
+    
     
     for pts in triangulated_points :
         object_points.pts_3D.append(pts)
@@ -57,7 +66,7 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
 
     reprojection_error(object_points.pts_3D, points_1, start, stop, Views[view_1].extrinsic_pose, Views[view_1].K)
     object_points.pts_3D = np.float32(object_points.pts_3D).reshape(-1,3)
-    display_3d(object_points.pts_3D)
+    # display_3d(object_points.pts_3D)
     object_points.pts_3D = object_points.pts_3D.tolist()
     #set point indices for 3D points
     # self.set_point_indices()
@@ -74,11 +83,11 @@ def statistical_outlier_filtering(points3d, pts1, pts2, gdi):
     gdi = gdi[inliers_mask]
     
     
-    inliers_mask = outlier_filtering(points3d, method='i')
-    points3d = points3d[inliers_mask]
-    pts1 = pts1[inliers_mask]
-    pts2 = pts2[inliers_mask]
-    gdi = gdi[inliers_mask]
+    # inliers_mask = outlier_filtering(points3d, method='i')
+    # points3d = points3d[inliers_mask]
+    # pts1 = pts1[inliers_mask]
+    # pts2 = pts2[inliers_mask]
+    # gdi = gdi[inliers_mask]
     gdi = gdi.tolist()
     return points3d, pts1, pts2, gdi
 

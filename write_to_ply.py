@@ -1,0 +1,23 @@
+import numpy as np
+from plyfile import PlyData, PlyElement
+def write_to_ply_file(object_points, name):
+    pcd_name = name + "point_cloud.ply"
+    cam_name = name + "camera_path.ply"
+    # object_points.statistical_outlier_filtering_with_whole()
+    
+    object_points.pts_3D = np.float32(object_points.pts_3D).reshape(-1,3)
+    x,y,z =object_points.pts_3D[:, 0], object_points.pts_3D[:,1], object_points.pts_3D[:, 2]
+    object_points.pts_3D_color = np.uint8(object_points.pts_3D_color).reshape(-1,3)
+    r, g, b= object_points.pts_3D_color[:, 0], object_points.pts_3D_color[:, 1], object_points.pts_3D_color[:, 2] 
+    pts = list(zip(x,y,z,r,g,b))
+    vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
+
+    el = PlyElement.describe(vertex, 'vertex')
+    PlyData([el]).write(pcd_name)
+    # object_points.camera_path = np.float32(object_points.camera_path).reshape(-1,3)
+    
+    # x,y,z =object_points.camera_path[:, 0], object_points.camera_path[:,1], object_points.camera_path[:, 2]
+    # pts = list(zip(x,y,z))
+    # vertex = np.array(pts, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
+    # el = PlyElement.describe(vertex, 'vertex')
+    # PlyData([el]).write(cam_name)

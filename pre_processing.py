@@ -65,7 +65,7 @@ def find_average_depth(qv: ImageView, tv: ImageView, proj2, matches):
     
     # Calculate average depth
     average_depth = np.mean(norms) 
-    print("Frame:", qv.id, "\tFrame:", tv.id)
+    print("View:", qv.id, "\tView:", tv.id)
     print('Average depth:', average_depth)
 
     return average_depth
@@ -86,7 +86,6 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
             avg_depth = find_average_depth(query_view, comp_view, proj2, i_matches)
             imgpair = ImagePair(query_view.id, comp_view.id, proj2, i_matches, avg_depth)
             for m in i_matches:
-                # if query_view.global_descriptor[m.queryIdx] ==-1
                 query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
                 query_view.global_descriptor_status[m.queryIdx] = True
             association.append(imgpair)
