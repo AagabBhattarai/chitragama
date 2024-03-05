@@ -35,7 +35,8 @@ def find_projection(qv: ImageView, tv: ImageView, matches):
     i_matches = [m for i,m in enumerate(matches) if fmask[i]==1]
     # i_matches = matches[fmask.ravel() ==1]
     # assert m_shape == matches.shape, "Assertion Error, must reshape appropriately"
-    
+    # if len(i_matches)==0:
+    #     print("THE HELL") 
     temp = np.eye(4)
     proj2 = temp[:3, :4]
     proj2[:3, :3] = R
@@ -79,17 +80,22 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
             if(len(association)>0):
                 Scene_graph.append(association)
             return
-        
+        sad_exit = False 
         matches = find_match(query_view, comp_view, bf_matcher)
         if(len(matches) > 30):
             proj2, i_matches = find_projection(query_view, comp_view, matches)
-            avg_depth = find_average_depth(query_view, comp_view, proj2, i_matches)
-            imgpair = ImagePair(query_view.id, comp_view.id, proj2, i_matches, avg_depth)
-            for m in i_matches:
-                query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
-                query_view.global_descriptor_status[m.queryIdx] = True
-            association.append(imgpair)
+            if(len(i_matches) > 30):
+                avg_depth = find_average_depth(query_view, comp_view, proj2, i_matches)
+                imgpair = ImagePair(query_view.id, comp_view.id, proj2, i_matches, avg_depth)
+                for m in i_matches:
+                    query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
+                    query_view.global_descriptor_status[m.queryIdx] = True
+                association.append(imgpair)
+            else: 
+                sad_exit = True
         else:
+            sad_exit = True
+        if sad_exit:
             imgpair = ImagePair(query_view.id, comp_view.id, np.ones((3,4)), [], 1)
             association.append(imgpair)
     

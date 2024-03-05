@@ -24,7 +24,7 @@ def triangulate_new_points(Views, Scene_graph, initialization_ids, object_points
     view_1, view_2 = initialization_ids
     img_pair:ImagePair = Scene_graph[view_1-1][view_2]
     matches = img_pair.matches
-    if len(matches) == 0:
+    if len(matches) < 30:
         return
     compute_3D_points(view_1, view_2, matches, Views, object_points)
     
@@ -96,14 +96,15 @@ def setup_for_BA():
 
 def register_new_view(viewid, Views, object_points:ObjectPoints, feature_track):
     view:ImageView = Views[viewid]
-    common_3D_pts = list()
-    common_2D_pts = list()
-    for i,view_gd in enumerate(view.global_descriptor):
-        for j,obj_gd in enumerate(object_points.pts_3D_global_descriptor_value):
-            if view_gd == obj_gd:
-                common_3D_pts.append(object_points.pts_3D[j])
-                common_2D_pts.append(view.keypoints[i].pt)
-
+    common_3D_pts = []
+    common_2D_pts = []
+    
+    obj_gd_dict = {gd: pt for gd, pt in zip(object_points.pts_3D_global_descriptor_value, object_points.pts_3D)}
+    for i, view_gd in enumerate(view.global_descriptor):
+        if view_gd in obj_gd_dict:
+            common_3D_pts.append(obj_gd_dict[view_gd])
+            common_2D_pts.append(view.keypoints[i].pt)
+    
     common_2D_pts = np.float32(common_2D_pts).reshape(-1,2)
     common_3D_pts = np.float32(common_3D_pts).reshape(-1, 3)
     success, rvec, tvec, mask = cv.solvePnPRansac(  common_3D_pts,
