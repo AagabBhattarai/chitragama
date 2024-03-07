@@ -8,6 +8,7 @@ from tqdm import tqdm
 import cv2 as cv
 from bundle_adjustment import Bundle_Adjusment
 from bundle_setup import do_bundle_adjustment
+from try_meshing import do_it_all
 def main():
     arguments = sys.argv[1:]
     if len(arguments) == 0:
@@ -40,9 +41,12 @@ def main():
             update_view_pose(Views, views_processed, object_points)
             metainfo.error_sum = 0
             metainfo.bundle_adjustment_time = False
-        
+
+
     update_camera_path(object_points)
+    print('Before it all , ' , object_points.point_indices)
     write_to_ply_file(object_points,arg)
+    do_it_all(object_points)
 
 def set_camera_params(Views, views_processed, object_points:ObjectPoints):
     for i,id in enumerate(views_processed):

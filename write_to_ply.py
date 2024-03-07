@@ -31,21 +31,4 @@ def statistical_outlier_filtering_with_whole(object_points):
     inliers_mask = outlier_filtering(object_points.pts_3D, 'i')
     object_points.pts_3D = object_points.pts_3D[inliers_mask]
     object_points.pts_3D_color = object_points.pts_3D_color[inliers_mask]
-    vis = pyvista.Plotter()
-    pyv_pt_cloud = pyvista.PolyData(object_points.pts_3D)
     
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(object_points.pts_3D)
-    pcd.estimate_normals()
-    pyv_pt_cloud['vectors'] = pcd.normals
-    arrows = pyv_pt_cloud.glyph(
-        orient = 'vectors',
-        scale = False,
-        factor = 0.15,
-    )
-    #mesh = pcd.compute_convex_hull()
-    vis.add_mesh(pyv_pt_cloud, show_scalar_bar = False, scalars = np.uint8(object_points.pts_3D_color).reshape(-1,3), rgb = True)
-    vis.add_mesh(arrows, color = 'lightblue')
-    #vis.add_mesh(surf)
-    vis.show()
-    vis.close()
