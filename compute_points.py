@@ -136,7 +136,7 @@ def register_new_view(viewid, Views, object_points:ObjectPoints, feature_track):
     # object_points.pts_3D = object_points.pts_3D.tolist()
     
 
-def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo):
+def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo, preferences = Preferences() ):
     #takes newly calculated 3D pts and 2D correspondences and calculate reprojection error
     #3D points are assumed to be in Eucledian Space
     original_pts = pt1
@@ -162,7 +162,7 @@ def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo):
     print(f"Reprojection for newly triangulated points Error: {error}")
     metainfo.error_sum += error
     print(f"ERROR SUM: {metainfo.error_sum}")
-    if (metainfo.error_sum > 0.5):
+    if (metainfo.error_sum > preferences.error_threshold):
         metainfo.bundle_adjustment_time = True
     
     # return self.bundle_adjustment_time

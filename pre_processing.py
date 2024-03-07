@@ -44,10 +44,6 @@ def find_projection(qv: ImageView, tv: ImageView, matches):
     
     return proj2, i_matches
 
-def to_camera_coordinate(K, point: list[float]) -> list[float]:
-    normalized = [  (point[0] - K[0,2]) / K[0,0] ,  (point[1] - K[1,2])/K[1,1] ];
-    return normalized
-
 def find_average_depth(qv: ImageView, tv: ImageView, proj2, matches):
     temp = np.eye(4)
     sampling_rate = 30
@@ -96,7 +92,6 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
                         continue
                     upd_matches.append(m)
                     query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
-                    query_view.global_descriptor_status[m.queryIdx] = True
                 imgpair = ImagePair(query_view.id, comp_view.id, proj2, upd_matches, avg_depth)
                 association.append(imgpair)
             else: 

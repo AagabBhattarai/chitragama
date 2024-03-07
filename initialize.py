@@ -46,10 +46,20 @@ def initialization(Views: list, metainfo: MetaInfo):
     intrinsic_camera_matrix = compute_intrinsic_matrix(filepaths[0], database_path)
     distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
 
+    # directory = "fountain"
+    # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+    # intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
+    # filepaths = glob.glob(f"{directory}/*.png")
+
     directory = "fountain"
     intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
     intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
     filepaths = glob.glob(f"{directory}/*.png")
+   
+    # directory = "pulchowk"
+    # intrinsic_camera_matrix = [[3123.392, 0, 4080/2],[0, 3123.118, 3060/2],[0, 0, 1]]
+    # intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
+    # filepaths = glob.glob(f"{directory}/*.jpg")
     #open images
     set_img_values(Views, filepaths, intrinsic_camera_matrix, distortion_coefficients)
     assert len(Views) == len(filepaths), f"AssertionError: Views not initialized properly Line:{inspect.currentframe().f_lineno}"

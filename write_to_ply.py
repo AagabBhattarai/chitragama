@@ -27,6 +27,6 @@ def write_to_ply_file(object_points: ObjectPoints, name):
     PlyData([el]).write(cam_name)
 
 def statistical_outlier_filtering_with_whole(object_points):
-    inliers_mask = outlier_filtering(object_points.pts_3D, 'l')
+    inliers_mask = outlier_filtering(object_points.pts_3D, 'i')
     object_points.pts_3D = object_points.pts_3D[inliers_mask]
     object_points.pts_3D_color = object_points.pts_3D_color[inliers_mask]
