@@ -1,8 +1,7 @@
-from info_track import ObjectPoints, ImagePair, MetaInfo, ImageView
+from info_track import ObjectPoints, ImagePair, MetaInfo, ImageView, Preferences
 import numpy as np
 import cv2 as cv
 from utilities import outlier_filtering, display_3d
-
 
 def model_initialization(Views, Scene_graph, initialization_ids,metainfo:MetaInfo):
     view_1, view_2 = initialization_ids
@@ -16,19 +15,19 @@ def model_initialization(Views, Scene_graph, initialization_ids,metainfo:MetaInf
     Views[view_2].extrinsic_pose = proj2
     
     object_points = ObjectPoints(metainfo.unique_feature_points) 
-    object_points = compute_3D_points(view_1, view_2, matches, Views, object_points )
+    object_points = compute_3D_points(view_1, view_2, matches, Views, object_points, metainfo )
     return object_points
 
-def triangulate_new_points(Views, Scene_graph, initialization_ids, object_points):
+def triangulate_new_points(Views, Scene_graph, initialization_ids, object_points, metainfo):
     initialization_ids = tuple(sorted(initialization_ids, reverse=True))
     view_1, view_2 = initialization_ids
     img_pair:ImagePair = Scene_graph[view_1-1][view_2]
     matches = img_pair.matches
     if len(matches) < 30:
         return
-    compute_3D_points(view_1, view_2, matches, Views, object_points)
+    compute_3D_points(view_1, view_2, matches, Views, object_points, metainfo)
     
-def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints):
+def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints, metainfo:MetaInfo):
     unique_matches = list()
     for m in matches:
         if Views[view_1].global_descriptor[m.queryIdx] not in object_points.pts_3D_global_descriptor_value:
@@ -64,7 +63,7 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
         object_points.pts_3D_color.append(pixel_color)
 
 
-    reprojection_error(object_points.pts_3D, points_1, start, stop, Views[view_1].extrinsic_pose, Views[view_1].K)
+    reprojection_error(object_points.pts_3D, points_1, start, stop, Views[view_1].extrinsic_pose, Views[view_1].K, metainfo)
     object_points.pts_3D = np.float32(object_points.pts_3D).reshape(-1,3)
     # display_3d(object_points.pts_3D)
     object_points.pts_3D = object_points.pts_3D.tolist()
@@ -74,20 +73,22 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
     # setup_for_BA()
     return object_points
     
-def statistical_outlier_filtering(points3d, pts1, pts2, gdi):
-    inliers_mask = outlier_filtering(points3d, method='l')
-    points3d = points3d[inliers_mask]
-    pts1 = pts1[inliers_mask]
-    pts2 = pts2[inliers_mask]
+def statistical_outlier_filtering(points3d, pts1, pts2, gdi, preferences: Preferences = Preferences()):
     gdi = np.int32(gdi).ravel()
-    gdi = gdi[inliers_mask]
+    if preferences.filtering_l:
+        inliers_mask = outlier_filtering(points3d, method='l')
+        points3d = points3d[inliers_mask]
+        pts1 = pts1[inliers_mask]
+        pts2 = pts2[inliers_mask]
+        gdi = gdi[inliers_mask]
     
-    
-    # inliers_mask = outlier_filtering(points3d, method='i')
-    # points3d = points3d[inliers_mask]
-    # pts1 = pts1[inliers_mask]
-    # pts2 = pts2[inliers_mask]
-    # gdi = gdi[inliers_mask]
+    if preferences.filtering_i:
+        inliers_mask = outlier_filtering(points3d, method='i')
+        points3d = points3d[inliers_mask]
+        pts1 = pts1[inliers_mask]
+        pts2 = pts2[inliers_mask]
+        gdi = gdi[inliers_mask]
+        
     gdi = gdi.tolist()
     return points3d, pts1, pts2, gdi
 
@@ -135,7 +136,7 @@ def register_new_view(viewid, Views, object_points:ObjectPoints, feature_track):
     # object_points.pts_3D = object_points.pts_3D.tolist()
     
 
-def reprojection_error(points3d, pt1, start, stop, proj, K):
+def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo):
     #takes newly calculated 3D pts and 2D correspondences and calculate reprojection error
     #3D points are assumed to be in Eucledian Space
     original_pts = pt1
@@ -159,9 +160,22 @@ def reprojection_error(points3d, pt1, start, stop, proj, K):
     # reproj_pts = reproj_pts.ravel()
     
     print(f"Reprojection for newly triangulated points Error: {error}")
-    # self.error_sum += error
-    # print(f"ERROR SUM: {self.error_sum}")
-    # if (self.error_sum > 0.5):
-    #     self.bundle_adjustment_time = True
+    metainfo.error_sum += error
+    print(f"ERROR SUM: {metainfo.error_sum}")
+    if (metainfo.error_sum > 0.5):
+        metainfo.bundle_adjustment_time = True
     
     # return self.bundle_adjustment_time
+def find_new_viewid(Views, views_processed, object_points:ObjectPoints, feature_track):
+    max_track_sum =10
+    view_n = -1
+    for view in Views:
+        if view.id not in views_processed:
+            common_to_world = np.logical_and(feature_track[view.id], object_points.pts_3D_global_descriptor[:])
+            track_sum = np.sum(common_to_world)    
+            if track_sum > max_track_sum:
+                view_n = view.id
+                max_track_sum = track_sum
+    finished = True if view_n == -1 else False
+    print("New view:", view_n)
+    return finished, view_n 

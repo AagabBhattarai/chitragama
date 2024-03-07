@@ -23,6 +23,7 @@ class TwoView:
         # self.test_directory = "nikolaiI"
         # self.test_directory = "guerre"
         # self.test_directory = "eglise"
+        # self.test_directory = "room1"
         self.filepaths = glob.glob(f"{self.test_directory}/*.jpg")
         self.database_path = "sensor_width_camera_database.txt"
         intrinsic_camera_matrix = compute_intrinsic_matrix(self.filepaths[0], self.database_path)

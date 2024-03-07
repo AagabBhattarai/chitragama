@@ -86,10 +86,18 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
             proj2, i_matches = find_projection(query_view, comp_view, matches)
             if(len(i_matches) > 30):
                 avg_depth = find_average_depth(query_view, comp_view, proj2, i_matches)
-                imgpair = ImagePair(query_view.id, comp_view.id, proj2, i_matches, avg_depth)
+                upd_matches = []
                 for m in i_matches:
+                    # if query_view.global_descriptor[m.queryIdx] == -1 and comp_view.global_descriptor[m.trainIdx] not in query_view.global_descriptor: #space should be empty and new gd shouldn't be same to any of the old ones, otherwise it will implying that different keypoints are the same
+                    # if query_view.global_descriptor[m.queryIdx] == -1 or query_view.global_descriptor[m.queryIdx] == comp_view.global_descriptor[m.trainIdx]:
+                    # if True: 
+                    # if query_view.global_descriptor[m.queryIdx] ==-1 and comp_view.global_descriptor[m.trainIdx] in query_view.global_descriptor:#if space is empty then new gd shouldn't be same to any of the old ones, otherwise it will implying that different keypoints are the same
+                    if comp_view.global_descriptor[m.trainIdx] in query_view.global_descriptor and comp_view.global_descriptor[m.trainIdx] != query_view.global_descriptor[m.queryIdx]:#if space is empty then new gd shouldn't be same to any of the old ones, otherwise it will implying that different keypoints are the same
+                        continue
+                    upd_matches.append(m)
                     query_view.global_descriptor[m.queryIdx] = comp_view.global_descriptor[m.trainIdx]
                     query_view.global_descriptor_status[m.queryIdx] = True
+                imgpair = ImagePair(query_view.id, comp_view.id, proj2, upd_matches, avg_depth)
                 association.append(imgpair)
             else: 
                 sad_exit = True
@@ -131,6 +139,8 @@ def main_flow():
     #find two views to initialize object scene
     feature_track = feature_track[:, :global_descriptor_index_value]
     initaization_ids = find_initialization_view_id(feature_track, Scene_graph)
+
+    debug_scene_g(Views)
     return Views, Scene_graph, initaization_ids, metainfo, feature_track
     
 
@@ -151,3 +161,11 @@ def find_initialization_view_id(feature_track,Scene_graph, maximum_depth_for_acc
     print("Maximum track sum:", maximum_track_sum) 
     print("View Initialization:", view1, "\tand\t", view2)
     return view1, view2
+
+
+def debug_scene_g(Views):
+    for view in Views:
+        print("View Id:", view.id)
+        print("GD length:", len(view.global_descriptor))
+        print("Set GD length:", len(set(view.global_descriptor)))
+        assert len(view.global_descriptor) == len(set(view.global_descriptor)), "Assertion Error: Global descriptor repeatation"
