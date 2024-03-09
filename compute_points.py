@@ -32,7 +32,7 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
     for m in matches:
         if Views[view_1].global_descriptor[m.queryIdx] not in object_points.pts_3D_global_descriptor_value:
             unique_matches.append(m)
-    if len(unique_matches) == 0:
+    if len(unique_matches) < 25:
         return object_points  
     points_1 =np.float32([ Views[view_1].keypoints[m.queryIdx].pt for m in unique_matches]).reshape(-1,2)
     points_2 =np.float32([ Views[view_2].keypoints[m.trainIdx].pt for m in unique_matches]).reshape(-1,2)
@@ -43,34 +43,39 @@ def compute_3D_points(view_1, view_2,matches, Views, object_points: ObjectPoints
     
     start = len(object_points.pts_3D)
     recovered_3D_points_in_homogenous = cv.triangulatePoints(p1, p2, points_1.T, points_2.T).T
+    print(len(recovered_3D_points_in_homogenous))
     triangulated_points =  recovered_3D_points_in_homogenous[:, 0:3]/recovered_3D_points_in_homogenous[:,3:]
     
     global_descriptors_for_triangulated_pts = [Views[view_1].global_descriptor[m.queryIdx] for m in unique_matches]
     stop = start + len(global_descriptors_for_triangulated_pts)
-    stat_return= statistical_outlier_filtering(triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts)
-    triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts = stat_return
+    if len(triangulated_points) >1:
+        stat_return= statistical_outlier_filtering(triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts)
+        triangulated_points, points_1, points_2, global_descriptors_for_triangulated_pts = stat_return
     assert start != stop, "Assertion error" 
     if len(global_descriptors_for_triangulated_pts) == 0:
         return object_points
     object_points.pts_3D_global_descriptor[global_descriptors_for_triangulated_pts] = True
     object_points.pts_3D_global_descriptor_value.extend(global_descriptors_for_triangulated_pts)
-    
-    
+    object_points.new_descriptor_addition_stop_index += len(global_descriptors_for_triangulated_pts)
+
+
     for pts in triangulated_points :
         object_points.pts_3D.append(pts)
     for (x,y) in points_1[:]:
         pixel_color = Views[view_1].bgr_img[int(y),int(x)][::-1]
         object_points.pts_3D_color.append(pixel_color)
 
-
+    
     reprojection_error(object_points.pts_3D, points_1, start, stop, Views[view_1].extrinsic_pose, Views[view_1].K, metainfo)
-    object_points.pts_3D = np.float32(object_points.pts_3D).reshape(-1,3)
-    # display_3d(object_points.pts_3D)
-    object_points.pts_3D = object_points.pts_3D.tolist()
+    # object_points.pts_3D = np.float32(object_points.pts_3D).reshape(-1,3)
+    # # display_3d(object_points.pts_3D)
+    # object_points.pts_3D = object_points.pts_3D.tolist()
     #set point indices for 3D points
     # self.set_point_indices()
     # self.add_points_2d()
     # setup_for_BA()
+    metainfo.views_used.add(view_1)
+    metainfo.views_used.add(view_2)
     return object_points
     
 def statistical_outlier_filtering(points3d, pts1, pts2, gdi, preferences: Preferences = Preferences()):
@@ -92,8 +97,6 @@ def statistical_outlier_filtering(points3d, pts1, pts2, gdi, preferences: Prefer
     gdi = gdi.tolist()
     return points3d, pts1, pts2, gdi
 
-def setup_for_BA():
-    pass
 
 def register_new_view(viewid, Views, object_points:ObjectPoints, feature_track):
     view:ImageView = Views[viewid]
@@ -116,24 +119,26 @@ def register_new_view(viewid, Views, object_points:ObjectPoints, feature_track):
     
     
     #Calculate Reprojection error for the overlapping points
-
-    print("PNP")
-    print("\nSCENE OVERLAPPING POINTS: ",mask.shape[0],"\n")
-    pts_3D = common_3D_pts[mask]
-    common_og_pts = common_2D_pts[mask].reshape(-1,2)
-    reproj_pts, _ = cv.projectPoints(pts_3D, rvec, tvec, view.K,distCoeffs=None)
-    reproj_pts = reproj_pts.reshape(-1,2) 
-    # print(f"\n\nREPROJECTION ERROR FOR OVERLAPP: BA RESET: {self.ba_reset}")
-    print(f"Reprojected points:\n{reproj_pts[:10,:]}")
-    print(f"Original points:\n{common_og_pts[:10,:]}")
-    error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
-    print(f"Error: {error}")
+    if success:
+        print("PNP")
+        print("\nSCENE OVERLAPPING POINTS: ",mask.shape[0],"\n")
+        pts_3D = common_3D_pts[mask]
+        common_og_pts = common_2D_pts[mask].reshape(-1,2)
+        reproj_pts, _ = cv.projectPoints(pts_3D, rvec, tvec, view.K,distCoeffs=None)
+        reproj_pts = reproj_pts.reshape(-1,2) 
+        # print(f"\n\nREPROJECTION ERROR FOR OVERLAPP: BA RESET: {self.ba_reset}")
+        print(f"Reprojected points:\n{reproj_pts[:10,:]}")
+        print(f"Original points:\n{common_og_pts[:10,:]}")
+        error = cv.norm(common_og_pts, reproj_pts, normType=cv.NORM_L2)/reproj_pts.shape[0]
+        print(f"Error: {error}")
+        
+        R = cv.Rodrigues(rvec)[0]
+        # self.transformation_matrix = np.eye(4)
+        view.extrinsic_pose[0:3, 0:3] = R
+        view.extrinsic_pose[0:3, 3:4] = tvec
+        # object_points.pts_3D = object_points.pts_3D.tolist()
     
-    R = cv.Rodrigues(rvec)[0]
-    # self.transformation_matrix = np.eye(4)
-    view.extrinsic_pose[0:3, 0:3] = R
-    view.extrinsic_pose[0:3, 3:4] = tvec
-    # object_points.pts_3D = object_points.pts_3D.tolist()
+    return success
     
 
 def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo, preferences = Preferences() ):
@@ -164,6 +169,7 @@ def reprojection_error(points3d, pt1, start, stop, proj, K, metainfo:MetaInfo, p
     print(f"ERROR SUM: {metainfo.error_sum}")
     if (metainfo.error_sum > preferences.error_threshold):
         metainfo.bundle_adjustment_time = True
+        # metainfo.bundle_adjustment_time = False
     
     # return self.bundle_adjustment_time
 def find_new_viewid(Views, views_processed, object_points:ObjectPoints, feature_track):

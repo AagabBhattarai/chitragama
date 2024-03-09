@@ -33,7 +33,10 @@ def compute_intrinsic_matrix(image_path, database_path):
         model_name, focal_length_mm, image_width, image_height = get_info_from_exif(img)
         sensor_width = read_from_database(database_path, model_name)
         sensor_height = (sensor_width * image_height) / image_width
-
+        print("Sensor Width", sensor_width)
+        print("Image Width", image_width)
+        print("Sensor height", sensor_height)
+        print("Image height", image_height)
         # Focal lengths in pixels
         focal_length_x = (focal_length_mm * image_width) / sensor_width
         focal_length_y = (focal_length_mm * image_height) / sensor_height
