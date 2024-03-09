@@ -43,6 +43,6 @@ def do_bundle_adjustment(bundle_adjustment:Bundle_Adjusment, object_points: Obje
     object_points.camera_params = object_points.camera_params.ravel().tolist()
     
     object_points.points_2d =  (object_points.points_2d).tolist()
-    object_points.camera_indices = (object_points.camera_indices).tolist()
+    object_points.camera_indices = (object_points.camera_indices).ravel().tolist()
     object_points.point_indices = (object_points.point_indices).ravel().tolist()
 

@@ -1,6 +1,6 @@
 from pre_processing import main_flow
 from compute_points import model_initialization, register_new_view, triangulate_new_points, find_new_viewid
-from info_track import ObjectPoints, ImageView
+from info_track import ObjectPoints, ImageView, MetaInfo
 import numpy as np
 from write_to_ply import write_to_ply_file
 import sys
@@ -17,11 +17,13 @@ def run_sfm(file_names, progress_bar):
     Views, Scene_graph, initialization_ids, metainfo, feature_track = main_flow(file_names)
     bundle_adjustment = Bundle_Adjusment()
 
-    set_gd_dict(Views)
+    if metainfo.do_bundle_adjustment:
+        set_gd_dict(Views)
     
     print("Initialization ID:", initialization_ids)
     object_points:ObjectPoints = model_initialization(Views, Scene_graph, initialization_ids, metainfo)
     views_processed.extend(initialization_ids)
+    object_points.incremental = True
     print('Total views are : ', metainfo.total_views)
 
 
@@ -30,24 +32,25 @@ def run_sfm(file_names, progress_bar):
     for _ in tqdm(range(metainfo.total_views - 2), desc="Processing Views"):
         progress_bar.step(progress_step)
         
+        metainfo.views_used = set()
         finished, viewid = find_new_viewid(Views, views_processed, object_points, feature_track)
         if finished:
             break 
-
-        register_new_view(viewid,Views, object_points, feature_track)
-        for processed_view in views_processed:
-            triangulate_new_points(Views, Scene_graph, (processed_view, viewid), object_points, metainfo)
-        views_processed.append(viewid)
-        set_camera_params(Views, views_processed, object_points)
-        if metainfo.bundle_adjustment_time:
-            set_BA_points(Views, views_processed, object_points)
-            do_bundle_adjustment(bundle_adjustment, object_points, Views[viewid].K)
-            update_view_pose(Views, views_processed, object_points)
-            metainfo.error_sum = 0
-            metainfo.bundle_adjustment_time = False
-
-
-
+        
+        success = register_new_view(viewid,Views, object_points, feature_track)
+        if success:
+            for processed_view in views_processed:
+                triangulate_new_points(Views, Scene_graph, (processed_view, viewid), object_points, metainfo)
+            views_processed.append(viewid)
+            set_camera_params(Views, views_processed, object_points)
+            if metainfo.bundle_adjustment_time and metainfo.do_bundle_adjustment:
+                # set_BA_points(Views, views_processed, object_points)
+                efficient_set_BA_points(Views, views_processed, object_points, metainfo, viewid)
+                do_bundle_adjustment(bundle_adjustment, object_points, Views[viewid].K)
+                update_view_pose(Views, views_processed, object_points)
+                metainfo.error_sum = 0
+                metainfo.bundle_adjustment_time = False
+        
     update_camera_path(object_points)
     #print('Before it all , ' , object_points.point_indices)
     #write_to_ply_file(object_points,arg)
@@ -87,6 +90,31 @@ def set_BA_points(Views, views_processed, object_points:ObjectPoints):
     object_points.points_2d = points_2d
     object_points.point_indices = point_indices
     object_points.camera_indices = camera_indices
+
+def efficient_set_BA_points(Views, views_processed, object_points:ObjectPoints, metainfo:MetaInfo, nri_viewId):
+
+    for viewID in metainfo.views_used:
+        view = Views[viewID]
+        for i,gd in enumerate(object_points.pts_3D_global_descriptor_value[object_points.new_descriptor_addition_start_index:object_points.new_descriptor_addition_stop_index]):
+            if gd in view.global_descriptor:
+                index_for_point_2d = view.global_descriptor_and_index[gd]
+                point_2d = view.keypoints[index_for_point_2d].pt
+                object_points.points_2d.append(point_2d)
+                object_points.point_indices.append(i + object_points.new_descriptor_addition_start_index)
+                object_points.camera_indices.append(object_points.camera_params_map[view.id])
+
+
+    nri_view = Views[nri_viewId]
+    for i,gd in enumerate(object_points.pts_3D_global_descriptor_value[:object_points.new_descriptor_addition_start_index]):
+        if gd in nri_view.global_descriptor:
+            index_for_point_2d = nri_view.global_descriptor_and_index[gd]
+            point_2d = nri_view.keypoints[index_for_point_2d].pt
+            object_points.points_2d.append(point_2d)
+            object_points.point_indices.append(i)
+            object_points.camera_indices.append(object_points.camera_params_map[nri_view.id])
+    
+    object_points.new_descriptor_addition_start_index = object_points.new_descriptor_addition_stop_index
+    
 
 def update_view_pose(Views, views_processed, object_points:ObjectPoints):
     object_points.camera_params = np.float32(object_points.camera_params).reshape(-1, object_points.n_camera_params_ba)

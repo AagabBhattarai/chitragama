@@ -8,8 +8,8 @@ class ImageView:
         self.descriptors = None
 
         self.global_descriptor = list()#this stores "global descriptor for the keypoints" --just a number value
-        self.global_descriptor_and_index = dict() # Key = global_descriptor, Value= True/False (Status if the feature point can be triangulated)
-
+        self.global_descriptor_and_index = dict() # Key = global_descriptor, Value= Index for Keypoints
+        self.global_descriptor_set = set()
         temp = np.eye(4)
         self.extrinsic_pose = temp[:3,:4]
         self.K = None   
@@ -26,16 +26,19 @@ class MetaInfo:
         self.total_views = 0
         self.bundle_adjustment_time = False
         self.error_sum = 0
-        
+        self.do_bundle_adjustment = True
+        self.views_used = set() 
         
 class ImagePair:
-    def __init__(self, l, r, p, i_m, average_depth):
+    def __init__(self, l, r, p, i_m, average_depth, median_triangulation_angle):
         self.view_1 = l
         self.view_2 = r
 
         self.projection = p # actually transformation matrix form cam1 wc to cam2 wc 
         self.matches = i_m
+        self.median_angle = median_triangulation_angle
         self.average_depth = average_depth
+
 
 class ObjectPoints:
     def __init__(self, unique_feature_points):
@@ -53,9 +56,12 @@ class ObjectPoints:
         self.camera_params_map = dict() 
         self.n_camera_params_ba = 6 #only extrinsic pose will get modified
 
+        self.new_descriptor_addition_start_index = 0
+        self.new_descriptor_addition_stop_index = 0
+        self.incremental = False
 class Preferences:
     def __init__(self):
         self.filtering_l = True
         self.filtering_i = False
-        self.error_threshold = 5.0
+        self.error_threshold = 10 
         
