@@ -36,13 +36,15 @@ def find_feature_points(Views: list, metainfo:MetaInfo):
  
 def initialization(Views: list, metainfo: MetaInfo):
     directory = "GustavIIAdolf"
+    # directory = "trophy2"
+    # directory = "LUsphinx"
     # directory = "nikolaiI"
     # directory = "guerre"
     # directory = "eglise"
     # directory = "room1"
     filepaths = glob.glob(f"{directory}/*.jpg")
     filepaths = filepaths[:10]
-    database_path = "sensor_width_camera_database.txt"
+    database_path = "sensor_database_detailed.txt"
     intrinsic_camera_matrix = compute_intrinsic_matrix(filepaths[0], database_path)
     distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
 
@@ -51,10 +53,10 @@ def initialization(Views: list, metainfo: MetaInfo):
     # intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
     # filepaths = glob.glob(f"{directory}/*.png")
 
-    directory = "fountain"
-    intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
-    intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
-    filepaths = glob.glob(f"{directory}/*.png")
+    # directory = "fountain"
+    # intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+    # intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
+    # filepaths = glob.glob(f"{directory}/*.png")
    
     # directory = "pulchowk"
     # intrinsic_camera_matrix = [[3123.392, 0, 4080/2],[0, 3123.118, 3060/2],[0, 0, 1]]
