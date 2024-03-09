@@ -34,22 +34,22 @@ def find_feature_points(Views: list, metainfo:MetaInfo):
         view.set_initial_id()
 
  
-def initialization(Views: list, metainfo: MetaInfo):
-    directory = "GustavIIAdolf"
-    # directory = "nikolaiI"
+def initialization(Views: list, metainfo: MetaInfo, filepaths):
+    # directory = "GustavIIAdolf"
+    #directory = "nikolaiI"
     # directory = "guerre"
     # directory = "eglise"
     # directory = "room1"
-    filepaths = glob.glob(f"{directory}/*.jpg")
-    filepaths = filepaths[:10]
+    #filepaths = glob.glob(f"{directory}/*.jpg")
+    #filepaths = filepaths[:10]
     database_path = "sensor_width_camera_database.txt"
     intrinsic_camera_matrix = compute_intrinsic_matrix(filepaths[0], database_path)
     distortion_coefficients = np.zeros(4, dtype=np.float32).reshape(1,4)
 
-    directory = "fountain"
-    intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
-    intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
-    filepaths = glob.glob(f"{directory}/*.png")
+    #directory = "fountain"
+    #intrinsic_camera_matrix = [[689.87, 0, 380.17],[0, 691.04, 251.70],[0, 0, 1]]
+    #intrinsic_camera_matrix = np.float32(intrinsic_camera_matrix)
+    #filepaths = glob.glob(f"{directory}/*.png")
 
    
     # directory = "pulchowk"

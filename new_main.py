@@ -8,16 +8,13 @@ from tqdm import tqdm
 import cv2 as cv
 from bundle_adjustment import Bundle_Adjusment
 from bundle_setup import do_bundle_adjustment
-from try_meshing import do_it_all
-def main():
-    arguments = sys.argv[1:]
-    if len(arguments) == 0:
-        arg = 'def'
-    else: 
-        arg = arguments[0]
-    
+
+
+import tkinter as tk
+
+def run_sfm(file_names, progress_bar):        
     views_processed = list()
-    Views, Scene_graph, initialization_ids, metainfo, feature_track = main_flow()
+    Views, Scene_graph, initialization_ids, metainfo, feature_track = main_flow(file_names)
     bundle_adjustment = Bundle_Adjusment()
 
     set_gd_dict(Views)
@@ -25,7 +22,14 @@ def main():
     print("Initialization ID:", initialization_ids)
     object_points:ObjectPoints = model_initialization(Views, Scene_graph, initialization_ids, metainfo)
     views_processed.extend(initialization_ids)
+    print('Total views are : ', metainfo.total_views)
+
+
+    
+    progress_step = 100 / (metainfo.total_views - 2)
     for _ in tqdm(range(metainfo.total_views - 2), desc="Processing Views"):
+        progress_bar.step(progress_step)
+        
         finished, viewid = find_new_viewid(Views, views_processed, object_points, feature_track)
         if finished:
             break 
@@ -43,10 +47,13 @@ def main():
             metainfo.bundle_adjustment_time = False
 
 
+
     update_camera_path(object_points)
-    print('Before it all , ' , object_points.point_indices)
-    write_to_ply_file(object_points,arg)
-    do_it_all(object_points)
+    #print('Before it all , ' , object_points.point_indices)
+    #write_to_ply_file(object_points,arg)
+    return object_points
+
+
 
 def set_camera_params(Views, views_processed, object_points:ObjectPoints):
     for i,id in enumerate(views_processed):
@@ -111,6 +118,3 @@ def update_camera_path(object_points: ObjectPoints):
         cam_path = (-rmat.T @ tvec).tolist()
         # object_points.camera_path[i] = cam_path
         object_points.camera_path.append(cam_path)
-
-if __name__== "__main__":
-    main()

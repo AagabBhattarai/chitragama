@@ -103,13 +103,13 @@ def match_and_find_scene_graph_relation(query_view: ImageView, Views: list, Scen
             association.append(imgpair)
     
             
-def main_flow():
+def main_flow(recons_images):
     Views = []
     metainfo = MetaInfo()
     Scene_graph = []
     bf_matcher = cv.BFMatcher()
     #Open Images and compute SIFT features 
-    initialization(Views, metainfo)
+    initialization(Views, metainfo, recons_images)
     print('Total Keypoints:', metainfo.total_feature_points) 
     
     #Track 2D features for across all views
